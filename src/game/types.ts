@@ -1,22 +1,22 @@
-// The data shapes for Marrakech. Plain data only — no methods, no behaviour.
-// Behaviour lives in pure functions under game/ (see REWRITE.md §3 and §4).
+// The data shapes for Marrakech. 
 
-/** Player / rug colours. (Java: ColorPattern, minus NONE.) */
+// Player / rug colours. 
 export type Colour = 'c' | 'y' | 'r' | 'p';
 
-/** Direction Assam faces. (Java: Orientation.) */
+// Direction Assam faces. 
 export type Facing = 'N' | 'E' | 'S' | 'W';
 
-/** A board coordinate. col = x (horizontal), row = y (vertical). Top-left is (0,0). */
+// A board coordinate. col = x (horizontal), row = y (vertical). Top-left is (0,0).
 export type Coord = { col: number; row: number };
 
-/** A rug covers two adjacent squares — and KEEPS them after placement (fixes Java problem #2). */
+// A rug covers two adjacent squares — and KEEPS them after placement (fixes Java problem #2). 
 export type Rug = {
   colour: Colour;
   id: number;
   squares: [Coord, Coord];
 };
 
+// A player in the game.
 export type Player = {
   colour: Colour;
   dirhams: number; // money
@@ -29,10 +29,10 @@ export type Assam = {
   facing: Facing;
 };
 
-/** One board square: the rug visible on top, or null for empty sand. */
+// One board square: the rug visible on top, or null for empty sand.
 export type Cell = { colour: Colour; rugId: number } | null;
 
-/** THE ONE SOURCE OF TRUTH. Treated as immutable: rules return a new GameState. */
+// THE ONE SOURCE OF TRUTH. Treated as immutable: rules return a new GameState.
 export type GameState = {
   players: Player[];
   assam: Assam;
