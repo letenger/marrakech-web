@@ -96,6 +96,20 @@ function rebuildRugs(board: Cell[][]): Rug[] {
   }));
 }
 
+// Parse a rug string (colour + 2-digit id + 4 coord digits, e.g. "c013334").
+// Returns null if malformed or off-board, matching the Java validity rules.
+export function parseRug(rugString: string): Rug | null {
+  if (!/^[cyrp]\d{2}[0-6]{4}$/.test(rugString)) return null;
+  return {
+    colour: rugString[0] as Colour,
+    id: Number(rugString.slice(1, 3)),
+    squares: [
+      { col: Number(rugString[3]), row: Number(rugString[4]) },
+      { col: Number(rugString[5]), row: Number(rugString[6]) },
+    ],
+  };
+}
+
 export function parse(gameString: string): GameState {
   const board = parseBoard(gameString);
   return {
