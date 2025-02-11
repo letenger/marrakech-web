@@ -1,122 +1,49 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from 'react';
+import { BoardView } from './ui/BoardView';
+import { ScorePanel } from './ui/ScorePanel';
+import { newGame } from './game/setup';
+import type { Cell, GameState, Rug } from './game/types';
+import { BOARD_SIZE } from './game/types';
+import './ui/game.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+// A hand-authored position just to show the board off (step 6). Real play wiring
+// comes in step 8. Rugs are painted onto the board in order so the cells match
+// what BoardView draws.
+function buildDemo(): GameState {
+  const base = newGame(4, () => 0);
+  const rugs: Rug[] = [
+    { colour: 'r', id: 1, squares: [{ col: 1, row: 1 }, { col: 2, row: 1 }] },
+    { colour: 'y', id: 1, squares: [{ col: 2, row: 2 }, { col: 2, row: 3 }] },
+    { colour: 'c', id: 1, squares: [{ col: 3, row: 2 }, { col: 4, row: 2 }] },
+    { colour: 'p', id: 1, squares: [{ col: 4, row: 3 }, { col: 4, row: 4 }] },
+    { colour: 'c', id: 2, squares: [{ col: 2, row: 1 }, { col: 3, row: 1 }] }, // overlaps red r1
+    { colour: 'y', id: 2, squares: [{ col: 5, row: 4 }, { col: 5, row: 5 }] },
+    { colour: 'r', id: 2, squares: [{ col: 3, row: 4 }, { col: 3, row: 5 }] },
+  ];
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+  const board: Cell[][] = Array.from({ length: BOARD_SIZE }, () =>
+    Array.from({ length: BOARD_SIZE }, () => null as Cell),
+  );
+  for (const rug of rugs) {
+    for (const sq of rug.squares) board[sq.col][sq.row] = { colour: rug.colour, rugId: rug.id };
+  }
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  return { ...base, board, rugs, assam: { pos: { col: 3, row: 3 }, facing: 'E' } };
 }
 
-export default App
+export default function App() {
+  const [state] = useState<GameState>(buildDemo);
+
+  return (
+    <div className="app">
+      <header className="app-header">
+        <h1>Marrakech</h1>
+        <p className="tagline">Rug merchants of the medina</p>
+      </header>
+      <main className="layout">
+        <BoardView state={state} />
+        <ScorePanel state={state} />
+      </main>
+    </div>
+  );
+}
