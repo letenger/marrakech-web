@@ -56,6 +56,36 @@ body {
   filter: drop-shadow(0 12px 28px rgba(58, 33, 12, 0.28));
 }
 
+/* real photographed board with pieces positioned in % on top */
+.board-wrap {
+  position: relative;
+  width: min(600px, 92vw);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 14px 34px rgba(58, 33, 12, 0.32);
+}
+
+.board-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.rug {
+  position: absolute;
+  object-fit: fill;
+  border-radius: 3px;
+  filter: drop-shadow(0 3px 4px rgba(30, 15, 5, 0.45));
+}
+
+.assam {
+  position: absolute;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 5px rgba(20, 10, 2, 0.55));
+  transition: left 0.25s ease, top 0.25s ease, transform 0.2s ease;
+}
+
 /* score panel */
 .score-panel {
   background: #fffdf8;
@@ -110,4 +140,10 @@ body {
   color: var(--terracotta);
   min-width: 56px;
   justify-content: flex-end;
+}
+
+.coin {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
