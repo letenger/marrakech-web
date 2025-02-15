@@ -2,7 +2,7 @@
 // matching the physical game (see assets/example-game-state.png).
 // Pieces are positioned in *fractions of the board image*, measured from the
 // printed grid, so everything scales responsively with the board.
-import type { Colour, GameState, Rug } from '../game/types';
+import type { Colour, Coord, GameState, Rug } from '../game/types';
 import boardImg from '../assets/board.png';
 import assamImg from '../assets/assam.png';
 import rugCyan from '../assets/rug_cyan.png';
@@ -19,7 +19,10 @@ const FACING_ANGLE = { N: 0, E: 90, S: 180, W: 270 } as const;
 
 const pct = (n: number) => `${n * 100}%`;
 
-export function BoardView({ state }: { state: GameState }) {
+// A clickable/highlighted cell during the placement phase.
+export type Overlay = { coord: Coord; variant: 'anchor' | 'second' | 'selected'; onClick?: () => void };
+
+export function BoardView({ state, overlays = [] }: { state: GameState; overlays?: Overlay[] }) {
   return (
     <div className="board-wrap" style={{ aspectRatio: String(BOARD_ASPECT) }}>
       <img className="board-img" src={boardImg} alt="Marrakech board" draggable={false} />
@@ -27,6 +30,22 @@ export function BoardView({ state }: { state: GameState }) {
         <RugPiece key={i} rug={rug} z={i + 1} />
       ))}
       <AssamPiece state={state} />
+      {overlays.map((o, i) => (
+        <button
+          key={i}
+          type="button"
+          className={`cell-overlay overlay-${o.variant}`}
+          disabled={!o.onClick}
+          onClick={o.onClick}
+          aria-label={`cell ${o.coord.col},${o.coord.row}`}
+          style={{
+            left: pct(GEO.left + o.coord.col * GEO.cell),
+            top: pct(GEO.top + o.coord.row * GEO.cell),
+            width: pct(GEO.cell),
+            height: pct(GEO.cell),
+          }}
+        />
+      ))}
     </div>
   );
 }

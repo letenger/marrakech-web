@@ -1,38 +1,144 @@
 import { useState } from 'react';
 import { BoardView } from './ui/BoardView';
+import type { Overlay } from './ui/BoardView';
 import { ScorePanel } from './ui/ScorePanel';
+import { Controls } from './ui/Controls';
+import { PLAYER_NAME } from './ui/players';
 import { newGame } from './game/setup';
-import type { Cell, GameState, Rug } from './game/types';
-import { BOARD_SIZE } from './game/types';
+import { inBounds } from './game/board';
+import {
+  isPlacementValid,
+  isRugValid,
+  makePlacement,
+  moveAssam,
+  nextRugId,
+  rollDie,
+  rotateAssam,
+  settlePayment,
+  winnerOf,
+} from './game/rules';
+import type { Colour, Coord, GameState, Rug } from './game/types';
 import './ui/game.css';
 
-// A hand-authored position just to show the board off (step 6). Real play wiring
-// comes in step 8. Rugs are painted onto the board in order so the cells match
-// what BoardView draws.
-function buildDemo(): GameState {
-  const base = newGame(4, () => 0);
-  const rugs: Rug[] = [
-    { colour: 'r', id: 1, squares: [{ col: 1, row: 1 }, { col: 2, row: 1 }] },
-    { colour: 'y', id: 1, squares: [{ col: 2, row: 2 }, { col: 2, row: 3 }] },
-    { colour: 'c', id: 1, squares: [{ col: 3, row: 2 }, { col: 4, row: 2 }] },
-    { colour: 'p', id: 1, squares: [{ col: 4, row: 3 }, { col: 4, row: 4 }] },
-    { colour: 'c', id: 2, squares: [{ col: 2, row: 1 }, { col: 3, row: 1 }] }, // overlaps red r1
-    { colour: 'y', id: 2, squares: [{ col: 5, row: 4 }, { col: 5, row: 5 }] },
-    { colour: 'r', id: 2, squares: [{ col: 3, row: 4 }, { col: 3, row: 5 }] },
-  ];
+type UI = {
+  state: GameState;
+  die: number | null;
+  anchor: Coord | null;
+  message: string;
+  winner: Colour | 'tie' | null;
+};
 
-  const board: Cell[][] = Array.from({ length: BOARD_SIZE }, () =>
-    Array.from({ length: BOARD_SIZE }, () => null as Cell),
+const neighbours = (c: Coord): Coord[] => [
+  { col: c.col + 1, row: c.row },
+  { col: c.col - 1, row: c.row },
+  { col: c.col, row: c.row + 1 },
+  { col: c.col, row: c.row - 1 },
+];
+
+// Candidate rug for the current player covering squares a and b.
+function candidate(state: GameState, a: Coord, b: Coord): Rug {
+  const colour = state.players[state.turnIndex].colour;
+  return { colour, id: nextRugId(state, colour), squares: [a, b] };
+}
+function validPair(state: GameState, a: Coord, b: Coord): boolean {
+  const rug = candidate(state, a, b);
+  return isPlacementValid(state, rug) && isRugValid(state, rug);
+}
+// Tiles next to Assam that can anchor a legal rug.
+function legalAnchors(state: GameState): Coord[] {
+  return neighbours(state.assam.pos).filter(
+    (a) => inBounds(a) && neighbours(a).some((b) => validPair(state, a, b)),
   );
-  for (const rug of rugs) {
-    for (const sq of rug.squares) board[sq.col][sq.row] = { colour: rug.colour, rugId: rug.id };
-  }
+}
+// Given a chosen anchor, the tiles the rug can extend onto.
+function legalSeconds(state: GameState, anchor: Coord): Coord[] {
+  return neighbours(anchor).filter((b) => validPair(state, anchor, b));
+}
 
-  return { ...base, board, rugs, assam: { pos: { col: 3, row: 3 }, facing: 'E' } };
+// Move to the next active player, or end the game.
+function advanceTurn(state: GameState): GameState {
+  const active = state.players.filter((p) => !p.out);
+  if (active.length <= 1) return { ...state, phase: 'gameover' };
+
+  let idx = state.turnIndex;
+  for (let k = 0; k < state.players.length; k++) {
+    idx = (idx + 1) % state.players.length;
+    if (!state.players[idx].out) break;
+  }
+  if (state.players[idx].rugsLeft === 0) return { ...state, turnIndex: idx, phase: 'gameover' };
+  return { ...state, turnIndex: idx, phase: 'rotate' };
+}
+
+const turnName = (s: GameState) => PLAYER_NAME[s.players[s.turnIndex].colour];
+
+function freshGame(players: number): UI {
+  const state = newGame(players, Math.random);
+  return { state, die: null, anchor: null, winner: null, message: `${turnName(state)} to move — rotate Assam (or keep straight).` };
 }
 
 export default function App() {
-  const [state] = useState<GameState>(buildDemo);
+  const [ui, setUi] = useState<UI>(() => freshGame(4));
+  const { state } = ui;
+
+  // End a turn: advance, and detect game over.
+  function finishTurn(s: GameState, baseMessage: string) {
+    const next = advanceTurn(s);
+    if (next.phase === 'gameover') {
+      setUi({ state: next, die: null, anchor: null, winner: winnerOf(next), message: baseMessage });
+    } else {
+      setUi({ state: next, die: null, anchor: null, winner: null, message: `${baseMessage}${turnName(next)} to move.` });
+    }
+  }
+
+  function onRotate(deg: 0 | 90 | 270) {
+    if (state.phase !== 'rotate' || ui.winner) return;
+    const rotated = deg ? rotateAssam(state, deg) : state;
+    setUi({ ...ui, state: { ...rotated, phase: 'move' }, message: `${turnName(state)} — roll the die.` });
+  }
+
+  function onRoll() {
+    if (state.phase !== 'move' || ui.winner) return;
+    const die = rollDie(Math.random);
+    const pay = settlePayment(moveAssam(state, die));
+    let msg = `Rolled ${die}. `;
+    msg += pay.paid > 0 ? `Paid ${pay.paid} to ${PLAYER_NAME[pay.toColour!]}. ` : 'No rent owed. ';
+
+    if (pay.bankrupt) {
+      finishTurn(pay.state, `${msg}${turnName(state)} can't pay and is out! `);
+      return;
+    }
+    const placing: GameState = { ...pay.state, phase: 'place' };
+    if (legalAnchors(placing).length === 0) {
+      finishTurn(placing, `${msg}No legal rug placement — turn passes. `);
+      return;
+    }
+    setUi({ ...ui, state: placing, die, anchor: null, message: `${msg}Place a rug next to Assam.` });
+  }
+
+  function onPickAnchor(anchor: Coord) {
+    setUi({ ...ui, anchor, message: 'Now click a neighbouring tile to lay the rug.' });
+  }
+  function onPickSecond(second: Coord) {
+    if (!ui.anchor) return;
+    const placed = makePlacement(state, candidate(state, ui.anchor, second));
+    finishTurn(placed, `${turnName(state)} placed a rug. `);
+  }
+  function onCancel() {
+    setUi({ ...ui, anchor: null, message: 'Place a rug next to Assam.' });
+  }
+
+  // Build the clickable overlay for the placement phase.
+  let overlays: Overlay[] = [];
+  if (state.phase === 'place' && !ui.winner) {
+    if (ui.anchor === null) {
+      overlays = legalAnchors(state).map((c) => ({ coord: c, variant: 'anchor', onClick: () => onPickAnchor(c) }));
+    } else {
+      overlays = [
+        { coord: ui.anchor, variant: 'selected' },
+        ...legalSeconds(state, ui.anchor).map((c) => ({ coord: c, variant: 'second' as const, onClick: () => onPickSecond(c) })),
+      ];
+    }
+  }
 
   return (
     <div className="app">
@@ -41,8 +147,21 @@ export default function App() {
         <p className="tagline">Rug merchants of the medina</p>
       </header>
       <main className="layout">
-        <BoardView state={state} />
-        <ScorePanel state={state} />
+        <BoardView state={state} overlays={overlays} />
+        <div className="side">
+          <Controls
+            state={state}
+            die={ui.die}
+            message={ui.message}
+            winner={ui.winner}
+            canCancel={state.phase === 'place' && ui.anchor !== null}
+            onRotate={onRotate}
+            onRoll={onRoll}
+            onCancel={onCancel}
+            onNewGame={(n) => setUi(freshGame(n))}
+          />
+          <ScorePanel state={state} />
+        </div>
       </main>
     </div>
   );

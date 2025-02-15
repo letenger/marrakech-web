@@ -180,11 +180,9 @@ export function isGameOver(state: GameState): boolean {
   return state.players.every((p) => p.out || p.rugsLeft === 0);
 }
 
-// Winner: highest score, tie broken by most dirhams. 'none' if not over,
-// 'tie' if still level after both. Players who are out cannot win. (Java: getWinner.)
-export function getWinner(state: GameState): Colour | 'tie' | 'none' {
-  if (!isGameOver(state)) return 'none';
-
+// Best player by score, then by dirhams, among those still in. 'tie' if level.
+// Assumes the game is over; callers gate on that.
+export function winnerOf(state: GameState): Colour | 'tie' {
   let winners: Player[] = [];
   let bestScore = -Infinity;
   let bestDirhams = -Infinity;
@@ -204,4 +202,51 @@ export function getWinner(state: GameState): Colour | 'tie' | 'none' {
 
   if (winners.length !== 1) return 'tie';
   return winners[0].colour;
+}
+
+// Winner: highest score, tie broken by most dirhams. 'none' if not over,
+// 'tie' if still level after both. Players who are out cannot win. (Java: getWinner.)
+export function getWinner(state: GameState): Colour | 'tie' | 'none' {
+  if (!isGameOver(state)) return 'none';
+  return winnerOf(state);
+}
+
+// ---------------------------------------------------------------------------
+// Live-play helpers (used by the UI, not the assignment API)
+// ---------------------------------------------------------------------------
+
+// The next unused rug id for a colour, so each placed rug stays unique.
+export function nextRugId(state: GameState, colour: Colour): number {
+  const ids = state.rugs.filter((r) => r.colour === colour).map((r) => r.id);
+  return ids.length === 0 ? 0 : Math.max(...ids) + 1;
+}
+
+// Settle rent after Assam lands. The current player pays the owner of the rug
+// landed on, equal to the connected same-colour region. If they cannot pay in
+// full they pay what they can and drop out. (Java: settlePayment.)
+export function settlePayment(state: GameState): {
+  state: GameState;
+  paid: number;
+  toColour: Colour | null;
+  bankrupt: boolean;
+} {
+  const payer = state.players[state.turnIndex];
+  const landed = colourAt(state.board, state.assam.pos);
+  const noPayment = { state, paid: 0, toColour: null, bankrupt: false };
+
+  if (landed === null || landed === payer.colour) return noPayment;
+  const owner = state.players.find((p) => p.colour === landed);
+  if (!owner || owner.out) return noPayment;
+
+  const owed = countConnectedColour(state.board, state.assam.pos);
+  const paid = Math.min(owed, payer.dirhams);
+  const bankrupt = paid < owed;
+
+  const players = state.players.map((p) => {
+    if (p.colour === payer.colour) return { ...p, dirhams: p.dirhams - paid, out: p.out || bankrupt };
+    if (p.colour === owner.colour) return { ...p, dirhams: p.dirhams + paid };
+    return p;
+  });
+
+  return { state: { ...state, players }, paid, toColour: owner.colour, bankrupt };
 }
