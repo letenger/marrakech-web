@@ -94,6 +94,20 @@ export function moveAssam(state: GameState, die: number): GameState {
   return { ...state, assam: assamAfterMove(state.assam, die) };
 }
 
+// The cell-by-cell walk: one Assam state per square stepped forward, so the UI
+// can animate Assam pacing across the board (and pivoting at the edges). Taking
+// `die` single steps lands in the same place as one `die`-square move, because
+// the edge fold scales linearly with penetration depth.
+export function assamPath(assam: Assam, die: number): Assam[] {
+  const path: Assam[] = [];
+  let cur = assam;
+  for (let i = 0; i < die; i++) {
+    cur = assamAfterMove(cur, 1);
+    path.push(cur);
+  }
+  return path;
+}
+
 // ---------------------------------------------------------------------------
 // Rug placement
 // ---------------------------------------------------------------------------

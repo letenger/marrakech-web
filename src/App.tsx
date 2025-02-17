@@ -3,10 +3,14 @@ import { BoardView } from './ui/BoardView';
 import type { Overlay } from './ui/BoardView';
 import { ScorePanel } from './ui/ScorePanel';
 import { Controls } from './ui/Controls';
+import { DiceRoll } from './ui/DiceRoll';
+import { PaymentPrompt } from './ui/PaymentPrompt';
+import type { PaymentResult } from './ui/PaymentPrompt';
 import { PLAYER_NAME } from './ui/players';
 import { newGame } from './game/setup';
-import { inBounds } from './game/board';
+import { countConnectedColour, inBounds } from './game/board';
 import {
+  assamPath,
   isPlacementValid,
   isRugValid,
   makePlacement,
@@ -14,6 +18,7 @@ import {
   nextRugId,
   rollDie,
   rotateAssam,
+  scoreOf,
   settlePayment,
   winnerOf,
 } from './game/rules';
@@ -78,7 +83,11 @@ function freshGame(players: number): UI {
 
 export default function App() {
   const [ui, setUi] = useState<UI>(() => freshGame(4));
+  const [rolling, setRolling] = useState<{ value: 1 | 2 | 3 | 4; commit: () => void } | null>(null);
+  const [walking, setWalking] = useState(false);
+  const [prompt, setPrompt] = useState<{ result: PaymentResult; onContinue: () => void } | null>(null);
   const { state } = ui;
+  const busy = rolling !== null || walking || prompt !== null;
 
   // End a turn: advance, and detect game over.
   function finishTurn(s: GameState, baseMessage: string) {
@@ -96,10 +105,62 @@ export default function App() {
     setUi({ ...ui, state: { ...rotated, phase: 'move' }, message: `${turnName(state)} — roll the die.` });
   }
 
+  // Step 1 — roll: pick the die, then tumble it on screen.
   function onRoll() {
-    if (state.phase !== 'move' || ui.winner) return;
+    if (state.phase !== 'move' || ui.winner || busy) return;
     const die = rollDie(Math.random);
-    const pay = settlePayment(moveAssam(state, die));
+    setRolling({ value: die, commit: () => startWalk(die) });
+  }
+
+  // Step 2 — walk: pace Assam one cell at a time along his path.
+  function startWalk(die: 1 | 2 | 3 | 4) {
+    setRolling(null);
+    setWalking(true);
+    const path = assamPath(state.assam, die);
+    setUi((u) => ({ ...u, die, message: `Rolled ${die} — Assam sets off…` }));
+
+    const STEP_MS = 360;
+    let i = 0;
+    const stepOnce = () => {
+      const step = path[i]; // capture now — the updater below runs after i++ below
+      setUi((u) => ({ ...u, state: { ...u.state, assam: step } }));
+      i += 1;
+      window.setTimeout(i < path.length ? stepOnce : () => settleLanding(die), STEP_MS);
+    };
+    stepOnce();
+  }
+
+  // Step 3 — settle: work out the rent and, if any changes hands, show the prompt.
+  function settleLanding(die: 1 | 2 | 3 | 4) {
+    setWalking(false);
+    const moved = moveAssam(state, die);
+    const pay = settlePayment(moved);
+
+    if (pay.toColour === null) {
+      proceed(die, pay); // landed on sand or own rug — nothing to report
+      return;
+    }
+
+    const payer = pay.state.players.find((p) => p.colour === state.players[state.turnIndex].colour)!;
+    const owner = pay.state.players.find((p) => p.colour === pay.toColour)!;
+    const result: PaymentResult = {
+      die,
+      payer: payer.colour,
+      owner: owner.colour,
+      owed: countConnectedColour(moved.board, moved.assam.pos),
+      paid: pay.paid,
+      bankrupt: pay.bankrupt,
+      payerDirhams: payer.dirhams,
+      ownerDirhams: owner.dirhams,
+      payerScore: scoreOf(pay.state, payer),
+      ownerScore: scoreOf(pay.state, owner),
+    };
+    setPrompt({ result, onContinue: () => proceed(die, pay) });
+  }
+
+  // Step 4 — proceed: dismiss the prompt and move into placement (or end turn).
+  function proceed(die: 1 | 2 | 3 | 4, pay: ReturnType<typeof settlePayment>) {
+    setPrompt(null);
     let msg = `Rolled ${die}. `;
     msg += pay.paid > 0 ? `Paid ${pay.paid} to ${PLAYER_NAME[pay.toColour!]}. ` : 'No rent owed. ';
 
@@ -112,7 +173,7 @@ export default function App() {
       finishTurn(placing, `${msg}No legal rug placement — turn passes. `);
       return;
     }
-    setUi({ ...ui, state: placing, die, anchor: null, message: `${msg}Place a rug next to Assam.` });
+    setUi({ state: placing, die, anchor: null, winner: null, message: `${msg}Place a rug next to Assam.` });
   }
 
   function onPickAnchor(anchor: Coord) {
@@ -154,6 +215,7 @@ export default function App() {
             die={ui.die}
             message={ui.message}
             winner={ui.winner}
+            busy={busy}
             canCancel={state.phase === 'place' && ui.anchor !== null}
             onRotate={onRotate}
             onRoll={onRoll}
@@ -163,6 +225,8 @@ export default function App() {
           <ScorePanel state={state} />
         </div>
       </main>
+      {rolling && <DiceRoll value={rolling.value} onDone={rolling.commit} />}
+      {prompt && <PaymentPrompt r={prompt.result} onContinue={prompt.onContinue} />}
     </div>
   );
 }

@@ -7,6 +7,7 @@ export type Controls = {
   die: number | null;
   message: string;
   winner: Colour | 'tie' | null;
+  busy?: boolean; // a roll/walk/prompt is in progress — freeze the controls
   canCancel: boolean;
   onRotate: (deg: 0 | 90 | 270) => void;
   onRoll: () => void;
@@ -38,16 +39,16 @@ export function Controls(p: Controls) {
 
           {phase === 'rotate' && (
             <div className="btn-row">
-              <button type="button" onClick={() => p.onRotate(270)}>↺ Turn left</button>
-              <button type="button" onClick={() => p.onRotate(0)}>↑ Keep straight</button>
-              <button type="button" onClick={() => p.onRotate(90)}>↻ Turn right</button>
+              <button type="button" disabled={p.busy} onClick={() => p.onRotate(270)}>↺ Turn left</button>
+              <button type="button" disabled={p.busy} onClick={() => p.onRotate(0)}>↑ Keep straight</button>
+              <button type="button" disabled={p.busy} onClick={() => p.onRotate(90)}>↻ Turn right</button>
             </div>
           )}
 
           {phase === 'move' && (
             <div className="btn-row">
-              <button type="button" className="primary" onClick={p.onRoll}>
-                🎲 Roll die {p.die ? `— rolled ${p.die}` : ''}
+              <button type="button" className="primary" disabled={p.busy} onClick={p.onRoll}>
+                🎲 {p.busy ? 'Rolling…' : `Roll die${p.die ? ` — rolled ${p.die}` : ''}`}
               </button>
             </div>
           )}

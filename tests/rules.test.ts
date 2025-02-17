@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   assamAfterMove,
+  assamPath,
   rollDie,
   rotateAssam,
   isRugValid,
@@ -82,6 +83,19 @@ describe('moveAssam — complex (edge wrap) against real test data', () => {
     for (const c of loadCases('assam_movement_complex.txt')) {
       const got = formatAssam(assamAfterMove(parseAssam(c.assam), c.die));
       expect(got, `${c.assam} +${c.die}`).toBe(c.expected);
+    }
+  });
+});
+
+describe('assamPath — cell-by-cell walk lands where a single move does', () => {
+  it('final step equals assamAfterMove for every fixture case', () => {
+    for (const file of ['assam_movement_simple.txt', 'assam_movement_complex.txt']) {
+      for (const c of loadCases(file)) {
+        const start = parseAssam(c.assam);
+        const path = assamPath(start, c.die);
+        expect(path, `${c.assam} +${c.die} step count`).toHaveLength(c.die);
+        expect(formatAssam(path[path.length - 1]), `${c.assam} +${c.die}`).toBe(c.expected);
+      }
     }
   });
 });
