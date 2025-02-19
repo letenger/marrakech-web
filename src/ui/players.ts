@@ -13,3 +13,8 @@ export const PLAYER_NAME: Record<Colour, string> = {
   r: 'Red',
   p: 'Purple',
 };
+
+// Per-game display names: defaults to the colour names, overridden in Setup.
+export type PlayerNames = Record<Colour, string>;
+
+export const defaultNames = (): PlayerNames => ({ ...PLAYER_NAME });

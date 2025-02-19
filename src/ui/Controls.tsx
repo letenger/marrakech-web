@@ -1,18 +1,18 @@
 // Turn controls. Which buttons are enabled depends on the current phase.
 import type { Colour, GameState } from '../game/types';
-import { PLAYER_NAME } from './players';
+import type { PlayerNames } from './players';
 
 export type Controls = {
   state: GameState;
   die: number | null;
   message: string;
   winner: Colour | 'tie' | null;
+  names: PlayerNames;
   busy?: boolean; // a roll/walk/prompt is in progress — freeze the controls
   canCancel: boolean;
   onRotate: (deg: 0 | 90 | 270) => void;
   onRoll: () => void;
   onCancel: () => void;
-  onNewGame: (players: number) => void;
 };
 
 export function Controls(p: Controls) {
@@ -25,7 +25,7 @@ export function Controls(p: Controls) {
         {p.winner
           ? p.winner === 'tie'
             ? "It's a tie!"
-            : `${PLAYER_NAME[p.winner]} wins!`
+            : `${p.names[p.winner]} wins!`
           : p.message}
       </p>
 
@@ -56,7 +56,7 @@ export function Controls(p: Controls) {
           {phase === 'place' && (
             <div className="btn-row">
               <span className="hint">
-                {current && `${PLAYER_NAME[current.colour]}: click a tile next to Assam, then its partner.`}
+                {current && `${p.names[current.colour]}: click a tile next to Assam, then its partner.`}
               </span>
               {p.canCancel && (
                 <button type="button" onClick={p.onCancel}>Cancel</button>
@@ -65,15 +65,6 @@ export function Controls(p: Controls) {
           )}
         </>
       )}
-
-      <div className="btn-row new-game">
-        <span className="hint">New game:</span>
-        {[2, 3, 4].map((n) => (
-          <button key={n} type="button" onClick={() => p.onNewGame(n)}>
-            {n}P
-          </button>
-        ))}
-      </div>
     </section>
   );
 }

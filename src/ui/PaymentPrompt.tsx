@@ -2,7 +2,8 @@
 // spell out the rent — who pays whom, how many dirhams, and the resulting
 // scores — before play continues. Dismissed with Continue.
 import type { Colour } from '../game/types';
-import { PLAYER_HEX, PLAYER_NAME } from './players';
+import { PLAYER_HEX } from './players';
+import type { PlayerNames } from './players';
 import coinGold from '../assets/coin_gold.png';
 
 export type PaymentResult = {
@@ -25,11 +26,13 @@ function Swatch({ colour }: { colour: Colour }) {
 
 function Party({
   colour,
+  name,
   delta,
   dirhams,
   score,
 }: {
   colour: Colour;
+  name: string;
   delta: number;
   dirhams: number;
   score: number;
@@ -38,7 +41,7 @@ function Party({
   return (
     <div className="pp-party">
       <Swatch colour={colour} />
-      <span className="pp-party-name">{PLAYER_NAME[colour]}</span>
+      <span className="pp-party-name">{name}</span>
       <span className={`pp-delta ${delta < 0 ? 'down' : 'up'}`}>
         {sign}
         {delta}
@@ -51,7 +54,15 @@ function Party({
   );
 }
 
-export function PaymentPrompt({ r, onContinue }: { r: PaymentResult; onContinue: () => void }) {
+export function PaymentPrompt({
+  r,
+  names,
+  onContinue,
+}: {
+  r: PaymentResult;
+  names: PlayerNames;
+  onContinue: () => void;
+}) {
   return (
     <div className="pp-backdrop" onClick={onContinue}>
       <div className="pp-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -60,15 +71,15 @@ export function PaymentPrompt({ r, onContinue }: { r: PaymentResult; onContinue:
         </h3>
 
         <p className="pp-line">
-          <strong>{PLAYER_NAME[r.payer]}</strong> landed on{' '}
-          <strong>{PLAYER_NAME[r.owner]}</strong>'s rug ({r.owed}{' '}
+          <strong>{names[r.payer]}</strong> landed on{' '}
+          <strong>{names[r.owner]}</strong>'s rug ({r.owed}{' '}
           {r.owed === 1 ? 'tile' : 'tiles'}) — pays <strong>{r.paid}</strong> 🪙.
           {r.bankrupt && ` Can't cover ${r.owed} and is out.`}
         </p>
 
         <div className="pp-ledger">
-          <Party colour={r.payer} delta={-r.paid} dirhams={r.payerDirhams} score={r.payerScore} />
-          <Party colour={r.owner} delta={r.paid} dirhams={r.ownerDirhams} score={r.ownerScore} />
+          <Party colour={r.payer} name={names[r.payer]} delta={-r.paid} dirhams={r.payerDirhams} score={r.payerScore} />
+          <Party colour={r.owner} name={names[r.owner]} delta={r.paid} dirhams={r.ownerDirhams} score={r.ownerScore} />
         </div>
 
         <button type="button" className="pp-continue" onClick={onContinue} autoFocus>

@@ -1,10 +1,11 @@
 // Shows each player's money (dirhams) and rugs left, with a real coin image.
 import type { GameState } from '../game/types';
 import { scoreOf } from '../game/rules';
-import { PLAYER_HEX, PLAYER_NAME } from './players';
+import { PLAYER_HEX } from './players';
+import type { PlayerNames } from './players';
 import coinGold from '../assets/coin_gold.png';
 
-export function ScorePanel({ state }: { state: GameState }) {
+export function ScorePanel({ state, names }: { state: GameState; names: PlayerNames }) {
   return (
     <aside className="score-panel">
       <h2>Players</h2>
@@ -15,7 +16,7 @@ export function ScorePanel({ state }: { state: GameState }) {
         >
           <span className="swatch" style={{ background: PLAYER_HEX[p.colour] }} />
           <span className="player-name">
-            {PLAYER_NAME[p.colour]}
+            {names[p.colour]}
             {p.out && <span className="out-tag">out</span>}
           </span>
           <span className="stat">

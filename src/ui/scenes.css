@@ -1,0 +1,434 @@
+/* Scene shell, title/setup screens, and the menu / rules / game-over overlays.
+   Builds on the palette and primitives (.swatch, .pp-continue…) from game.css. */
+
+/* ---- scene enter animation ---- */
+.scene {
+  animation: scene-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes scene-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- home / title screen ---- */
+.scene-home {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 18%, #fbf3e2, #e7cfa3 75%);
+}
+
+.home-inner {
+  text-align: center;
+  max-width: 460px;
+}
+
+.home-die {
+  font-size: 4rem;
+  filter: drop-shadow(0 8px 14px rgba(58, 33, 12, 0.3));
+  animation: home-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes home-bob {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-10px) rotate(6deg); }
+}
+
+.home-title {
+  margin: 8px 0 0;
+  font-size: 3.4rem;
+  letter-spacing: 0.05em;
+  color: var(--terracotta);
+  text-shadow: 0 2px 0 #fff7, 0 6px 18px rgba(58, 33, 12, 0.25);
+}
+
+.home-tagline {
+  margin: 4px 0 32px;
+  font-style: italic;
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(280px, 80vw);
+  margin: 0 auto;
+}
+
+.home-btn {
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 13px 18px;
+  border-radius: 12px;
+  border: 1px solid #d9c6a0;
+  background: #fffdf8;
+  color: #5a3a18;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s, box-shadow 0.15s;
+  box-shadow: 0 4px 12px rgba(58, 33, 12, 0.12);
+}
+
+.home-btn:hover {
+  background: #f7ead0;
+}
+
+.home-btn:active {
+  transform: translateY(1px);
+}
+
+.home-btn.primary {
+  background: var(--terracotta);
+  color: #fff;
+  border-color: #934f17;
+  box-shadow: 0 6px 16px rgba(149, 79, 23, 0.35);
+}
+
+.home-btn.primary:hover {
+  background: #a25718;
+}
+
+/* ---- setup screen ---- */
+.scene-setup {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 0%, #fbf3e2, #efe1c4);
+}
+
+.setup-inner {
+  width: min(420px, 92vw);
+  background: #fffdf8;
+  border: 1px solid #e7d8b8;
+  border-radius: 18px;
+  padding: 26px 26px 22px;
+  box-shadow: 0 14px 34px rgba(58, 33, 12, 0.2);
+}
+
+.setup-title {
+  margin: 0 0 20px;
+  font-size: 1.8rem;
+  color: var(--terracotta);
+  text-align: center;
+}
+
+.setup-section {
+  margin-bottom: 20px;
+}
+
+.setup-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #997a4d;
+  margin-bottom: 8px;
+}
+
+.count-row {
+  display: flex;
+  gap: 10px;
+}
+
+.count-btn {
+  flex: 1;
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 700;
+  padding: 12px 0;
+  border-radius: 12px;
+  border: 1px solid #d9c6a0;
+  background: #fbf3e2;
+  color: #5a3a18;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.count-btn:hover {
+  background: #f3e4c5;
+}
+
+.count-btn.on {
+  background: var(--terracotta);
+  color: #fff;
+  border-color: #934f17;
+}
+
+.name-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.name-input {
+  flex: 1;
+  font: inherit;
+  font-size: 1rem;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid #d9c6a0;
+  background: #fbf8f0;
+  color: var(--ink);
+}
+
+.name-input:focus {
+  outline: 2px solid #e6b42255;
+  border-color: var(--terracotta);
+}
+
+.setup-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.setup-actions .home-btn {
+  flex: 1;
+}
+
+/* ---- in-game header + menu button ---- */
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.menu-btn {
+  font-size: 1.5rem;
+  line-height: 1;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid #d9c6a0;
+  background: #fffdf8;
+  color: #5a3a18;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(58, 33, 12, 0.12);
+  transition: background 0.15s;
+}
+
+.menu-btn:hover {
+  background: #f5e7c8;
+}
+
+/* ---- shared overlay backdrop (menu / rules / game over) ---- */
+.overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3400;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(30, 16, 5, 0.5);
+  backdrop-filter: blur(2px);
+  animation: dice-fade 0.18s ease;
+}
+
+/* ---- pause menu ---- */
+.menu-card {
+  width: min(300px, 90vw);
+  background: #fffdf8;
+  border: 1px solid #e7d8b8;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 18px 44px rgba(40, 22, 6, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: pp-pop 0.2s cubic-bezier(0.18, 0.9, 0.3, 1.2);
+}
+
+.menu-title {
+  margin: 0 0 6px;
+  text-align: center;
+  font-size: 1.3rem;
+  color: var(--terracotta);
+}
+
+.menu-item {
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 12px;
+  border-radius: 11px;
+  border: 1px solid #d9c6a0;
+  background: #fbf3e2;
+  color: #5a3a18;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.menu-item:hover {
+  background: #f3e4c5;
+}
+
+.menu-item:active {
+  transform: translateY(1px);
+}
+
+.menu-item.primary {
+  background: var(--terracotta);
+  color: #fff;
+  border-color: #934f17;
+}
+
+.menu-item.primary:hover {
+  background: #a25718;
+}
+
+.menu-item.danger {
+  color: #b5311f;
+  border-color: #e3b6ad;
+}
+
+.menu-item.danger:hover {
+  background: #fbeae6;
+}
+
+/* ---- rules card ---- */
+.rules-card {
+  width: min(440px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: #fffdf8;
+  border: 1px solid #e7d8b8;
+  border-radius: 16px;
+  padding: 18px 20px 18px;
+  box-shadow: 0 18px 44px rgba(40, 22, 6, 0.4);
+  animation: pp-pop 0.2s cubic-bezier(0.18, 0.9, 0.3, 1.2);
+}
+
+.rules-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.rules-head h2 {
+  margin: 0;
+  color: var(--terracotta);
+}
+
+.icon-close {
+  font-size: 1rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid #d9c6a0;
+  background: #fbf3e2;
+  color: #5a3a18;
+  cursor: pointer;
+}
+
+.icon-close:hover {
+  background: #f3e4c5;
+}
+
+.rules-body {
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: 14px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: #4a3318;
+}
+
+.rules-body h3 {
+  margin: 16px 0 6px;
+  color: var(--terracotta);
+  font-size: 1rem;
+}
+
+.rules-body ul,
+.rules-body ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.rules-body li {
+  margin-bottom: 5px;
+}
+
+/* ---- game over ---- */
+.over-card {
+  width: min(360px, 92vw);
+  background: #fffdf8;
+  border: 1px solid #e7d8b8;
+  border-radius: 18px;
+  padding: 24px 22px 20px;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(40, 22, 6, 0.45);
+}
+
+.over-crown {
+  font-size: 3rem;
+  animation: home-bob 3s ease-in-out infinite;
+}
+
+.over-title {
+  margin: 6px 0 18px;
+  font-size: 1.6rem;
+  color: var(--terracotta);
+}
+
+.over-standings {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.over-standings li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #f7eed9;
+  border-radius: 10px;
+}
+
+.over-standings li.is-out {
+  opacity: 0.5;
+}
+
+.over-rank {
+  font-weight: 700;
+  color: #997a4d;
+  width: 1.2em;
+  text-align: center;
+}
+
+.over-name {
+  flex: 1;
+  text-align: left;
+  font-weight: 600;
+}
+
+.over-score {
+  font-weight: 700;
+  color: var(--terracotta);
+  font-variant-numeric: tabular-nums;
+}
+
+.over-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
