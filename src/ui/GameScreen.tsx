@@ -225,7 +225,7 @@ export function GameScreen({ config, onExit }: { config: GameConfig; onExit: () 
           <p className="tagline">Rug merchants of the medina</p>
         </div>
         <button type="button" className="menu-btn" aria-label="Menu" onClick={() => setMenuOpen(true)}>
-          ☰
+          ❖
         </button>
       </header>
       <main className="layout">

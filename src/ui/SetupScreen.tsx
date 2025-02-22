@@ -7,6 +7,7 @@ import type { GameConfig } from './GameScreen';
 
 // Colours fill in the same fixed order the game assigns them (see setup.ts).
 const COLOURS: Colour[] = ['c', 'y', 'r', 'p'];
+const NAME_LIMIT = 12;
 
 export function SetupScreen({
   onStart,
@@ -59,13 +60,14 @@ export function SetupScreen({
                 <input
                   className="name-input"
                   value={names[c]}
-                  maxLength={14}
+                  maxLength={NAME_LIMIT}
                   placeholder={PLAYER_NAME[c]}
                   onChange={(e) => setNames((prev) => ({ ...prev, [c]: e.target.value }))}
                 />
               </label>
             ))}
           </div>
+          <span className="setup-foot">Up to {NAME_LIMIT} letters each.</span>
         </div>
 
         <div className="setup-actions">
@@ -73,7 +75,7 @@ export function SetupScreen({
             Back
           </button>
           <button type="button" className="home-btn primary" onClick={start}>
-            Start
+            Start Market
           </button>
         </div>
       </div>

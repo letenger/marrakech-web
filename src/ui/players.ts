@@ -7,11 +7,12 @@ export const PLAYER_HEX: Record<Colour, string> = {
   p: '#7D3C98',
 };
 
+// Evocative default names that still match each rug's real colour.
 export const PLAYER_NAME: Record<Colour, string> = {
-  c: 'Cyan',
-  y: 'Yellow',
-  r: 'Red',
-  p: 'Purple',
+  c: 'Peacock',
+  y: 'Saffron',
+  r: 'Crimson',
+  p: 'Amethyst',
 };
 
 // Per-game display names: defaults to the colour names, overridden in Setup.

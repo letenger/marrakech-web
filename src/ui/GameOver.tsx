@@ -2,6 +2,7 @@
 // offers a rematch (same players) or a trip back to the main menu.
 import type { Colour, GameState } from '../game/types';
 import { scoreOf } from '../game/rules';
+import { countColour } from '../game/board';
 import { PLAYER_HEX } from './players';
 import type { PlayerNames } from './players';
 
@@ -33,17 +34,23 @@ export function GameOver({
         </h2>
 
         <ol className="over-standings">
-          {standings.map((p, i) => (
-            <li key={p.colour} className={p.out ? 'is-out' : ''}>
-              <span className="over-rank">{i + 1}</span>
-              <span className="swatch" style={{ background: PLAYER_HEX[p.colour] }} />
-              <span className="over-name">
-                {names[p.colour]}
-                {p.out && <span className="out-tag">out</span>}
-              </span>
-              <span className="over-score">{scoreOf(state, p)} pts</span>
-            </li>
-          ))}
+          {standings.map((p, i) => {
+            const tiles = countColour(state.board, p.colour);
+            return (
+              <li key={p.colour} className={p.out ? 'is-out' : ''}>
+                <span className="over-rank">{i + 1}</span>
+                <span className="swatch" style={{ background: PLAYER_HEX[p.colour] }} />
+                <span className="over-name">
+                  {names[p.colour]}
+                  {p.out && <span className="out-tag">out</span>}
+                </span>
+                <span className="over-score">
+                  <b>{scoreOf(state, p)} pts</b>
+                  <small>{p.dirhams} 🪙 + {tiles} {tiles === 1 ? 'tile' : 'tiles'}</small>
+                </span>
+              </li>
+            );
+          })}
         </ol>
 
         <div className="over-actions">

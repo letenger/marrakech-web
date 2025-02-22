@@ -1,4 +1,5 @@
 // Shows each player's money (dirhams) and rugs left, with a real coin image.
+import type { CSSProperties } from 'react';
 import type { GameState } from '../game/types';
 import { scoreOf } from '../game/rules';
 import { PLAYER_HEX } from './players';
@@ -13,6 +14,7 @@ export function ScorePanel({ state, names }: { state: GameState; names: PlayerNa
         <div
           key={p.colour}
           className={`player-row ${i === state.turnIndex && !p.out ? 'is-turn' : ''} ${p.out ? 'is-out' : ''}`}
+          style={{ ['--glow']: PLAYER_HEX[p.colour] } as CSSProperties}
         >
           <span className="swatch" style={{ background: PLAYER_HEX[p.colour] }} />
           <span className="player-name">
