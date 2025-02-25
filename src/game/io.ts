@@ -92,7 +92,7 @@ function rebuildRugs(board: Cell[][]): Rug[] {
   return [...groups.values()].map((g) => ({
     colour: g.colour,
     id: g.id,
-    squares: (g.squares.length >= 2 ? [g.squares[0], g.squares[1]] : [g.squares[0], g.squares[0]]) as Rug['squares'],
+    squares: (g.squares.length >= 2 ? [g.squares[0], g.squares[1]] : [g.squares[0], g.squares[0]]),
   }));
 }
 

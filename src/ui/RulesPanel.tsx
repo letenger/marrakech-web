@@ -1,9 +1,20 @@
 // The rules of (this implementation of) Marrakech, shown as a dismissable
 // overlay. Reused from the Home screen and the in-game menu.
+import { useDialog } from './useDialog';
+
 export function RulesPanel({ onClose }: { onClose: () => void }) {
+  const ref = useDialog<HTMLDivElement>(onClose);
   return (
     <div className="overlay-backdrop" onClick={onClose}>
-      <div className="rules-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="rules-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="How to play"
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="rules-head">
           <h2>How to play</h2>
           <button type="button" className="icon-close" aria-label="Close" onClick={onClose}>

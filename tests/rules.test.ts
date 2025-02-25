@@ -129,7 +129,8 @@ describe('rug placement', () => {
     const after = makePlacement(game, rug('c', 1, [3, 4], [3, 5]));
     expect(after.board[3][4]).toEqual({ colour: 'c', rugId: 1 });
     expect(after.board[3][5]).toEqual({ colour: 'c', rugId: 1 });
-    expect(after.players.find((p) => p.colour === 'c')!.rugsLeft).toBe(14);
+    // 2-player game starts with 24 rugs; placing one leaves 23.
+    expect(after.players.find((p) => p.colour === 'c')!.rugsLeft).toBe(23);
     expect(after.rugs).toHaveLength(1);
   });
 

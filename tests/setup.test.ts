@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, INITIAL_DIRHAMS, INITIAL_RUGS } from '../src/game/setup';
+import { newGame, INITIAL_DIRHAMS, rugsForPlayers } from '../src/game/setup';
 import { BOARD_SIZE } from '../src/game/types';
 
 // A fake rng that always returns 0 -> picks the first option every time.
@@ -11,11 +11,19 @@ describe('newGame', () => {
     expect(newGame(4, rng0).players.map((p) => p.colour)).toEqual(['c', 'y', 'r', 'p']);
   });
 
-  it('gives every player the starting dirhams and rugs', () => {
+  it('gives every player the starting dirhams and no eliminations', () => {
     for (const p of newGame(4, rng0).players) {
       expect(p.dirhams).toBe(INITIAL_DIRHAMS);
-      expect(p.rugsLeft).toBe(INITIAL_RUGS);
       expect(p.out).toBe(false);
+    }
+  });
+
+  it('hands out rugs by player count, matching the physical game (24/15/12)', () => {
+    expect(rugsForPlayers(2)).toBe(24);
+    expect(rugsForPlayers(3)).toBe(15);
+    expect(rugsForPlayers(4)).toBe(12);
+    for (const [count, rugs] of [[2, 24], [3, 15], [4, 12]] as const) {
+      expect(newGame(count, rng0).players.every((p) => p.rugsLeft === rugs)).toBe(true);
     }
   });
 

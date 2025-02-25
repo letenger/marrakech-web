@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Colour } from '../game/types';
 import { PLAYER_HEX, PLAYER_NAME, defaultNames } from './players';
-import type { GameConfig } from './GameScreen';
+import type { GameConfig } from './players';
 
 // Colours fill in the same fixed order the game assigns them (see setup.ts).
 const COLOURS: Colour[] = ['c', 'y', 'r', 'p'];

@@ -4,6 +4,7 @@
 import type { Colour } from '../game/types';
 import { PLAYER_HEX } from './players';
 import type { PlayerNames } from './players';
+import { useDialog } from './useDialog';
 import coinGold from '../assets/coin_gold.png';
 
 export type PaymentResult = {
@@ -63,9 +64,18 @@ export function PaymentPrompt({
   names: PlayerNames;
   onContinue: () => void;
 }) {
+  const ref = useDialog<HTMLDivElement>(onContinue);
   return (
     <div className="pp-backdrop" onClick={onContinue}>
-      <div className="pp-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="pp-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Rent due"
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className={r.bankrupt ? 'pp-title danger' : 'pp-title'}>
           🎲 {r.die} · {r.bankrupt ? 'Bankrupt!' : 'Rent due'}
         </h3>

@@ -19,3 +19,6 @@ export const PLAYER_NAME: Record<Colour, string> = {
 export type PlayerNames = Record<Colour, string>;
 
 export const defaultNames = (): PlayerNames => ({ ...PLAYER_NAME });
+
+// The choices made on the Setup screen that define a match.
+export type GameConfig = { count: number; names: PlayerNames };

@@ -3,7 +3,14 @@ import { BOARD_SIZE } from './types';
 import type { Assam, Cell, Colour, Facing, GameState, Player } from './types';
 
 export const INITIAL_DIRHAMS = 30;
-export const INITIAL_RUGS = 15;
+
+// Rugs handed to each player, by player count — matching the physical game
+// (fewer players means more rugs each, so the board still fills up).
+const RUGS_BY_PLAYERS: Record<number, number> = { 2: 24, 3: 15, 4: 12 };
+
+export function rugsForPlayers(numPlayers: number): number {
+  return RUGS_BY_PLAYERS[numPlayers] ?? 15;
+}
 
 // Colours are always assigned in this fixed order (c -> y -> r -> p).
 const COLOUR_ORDER: Colour[] = ['c', 'y', 'r', 'p'];
@@ -20,8 +27,8 @@ function emptyBoard(): Cell[][] {
   );
 }
 
-function newPlayer(colour: Colour): Player {
-  return { colour, dirhams: INITIAL_DIRHAMS, rugsLeft: INITIAL_RUGS, out: false };
+function newPlayer(colour: Colour, rugs: number): Player {
+  return { colour, dirhams: INITIAL_DIRHAMS, rugsLeft: rugs, out: false };
 }
 
 // Assam starts in the centre (3,3) facing a random direction.
@@ -35,7 +42,8 @@ export function newGame(numPlayers: number, rng: Rng): GameState {
   if (numPlayers < 2 || numPlayers > 4) {
     throw new Error(`numPlayers must be 2..4, got ${numPlayers}`);
   }
-  const players = COLOUR_ORDER.slice(0, numPlayers).map(newPlayer);
+  const rugs = rugsForPlayers(numPlayers);
+  const players = COLOUR_ORDER.slice(0, numPlayers).map((c) => newPlayer(c, rugs));
   return {
     players,
     assam: newAssam(rng),

@@ -5,6 +5,7 @@ import { scoreOf } from '../game/rules';
 import { countColour } from '../game/board';
 import { PLAYER_HEX } from './players';
 import type { PlayerNames } from './players';
+import { useDialog } from './useDialog';
 
 export function GameOver({
   state,
@@ -25,9 +26,11 @@ export function GameOver({
     return byScore !== 0 ? byScore : b.dirhams - a.dirhams;
   });
 
+  const ref = useDialog<HTMLDivElement>(); // no Esc-dismiss: a choice is required
+
   return (
     <div className="overlay-backdrop">
-      <div className="over-card scene" role="dialog" aria-modal="true">
+      <div className="over-card scene" role="dialog" aria-modal="true" aria-label="Game over" tabIndex={-1} ref={ref}>
         <div className="over-crown">🏆</div>
         <h2 className="over-title">
           {winner === 'tie' ? "It's a tie!" : `${names[winner]} wins!`}

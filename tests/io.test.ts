@@ -4,9 +4,9 @@ import { newGame } from '../src/game/setup';
 import { makePlacement } from '../src/game/rules';
 import type { GameState, Rug } from '../src/game/types';
 
-// A fresh 2-player game (Assam faces N), empty board.
+// A fresh 2-player game (Assam faces N), empty board. 2 players start with 24 rugs.
 const EMPTY_BOARD = 'B' + 'n00'.repeat(49);
-const NEW_GAME_STR = 'Pc03015iPy03015iA33N' + EMPTY_BOARD;
+const NEW_GAME_STR = 'Pc03024iPy03024iA33N' + EMPTY_BOARD;
 
 function rug(colour: Rug['colour'], id: number, a: [number, number], b: [number, number]): Rug {
   return { colour, id, squares: [{ col: a[0], row: a[1] }, { col: b[0], row: b[1] }] };
@@ -22,8 +22,8 @@ describe('parse', () => {
   it('reads players, Assam and an empty board', () => {
     const g = parse(NEW_GAME_STR);
     expect(g.players).toEqual([
-      { colour: 'c', dirhams: 30, rugsLeft: 15, out: false },
-      { colour: 'y', dirhams: 30, rugsLeft: 15, out: false },
+      { colour: 'c', dirhams: 30, rugsLeft: 24, out: false },
+      { colour: 'y', dirhams: 30, rugsLeft: 24, out: false },
     ]);
     expect(g.assam).toEqual({ pos: { col: 3, row: 3 }, facing: 'N' });
     expect(g.board.flat().every((c) => c === null)).toBe(true);

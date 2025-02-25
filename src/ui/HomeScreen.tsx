@@ -3,7 +3,15 @@
 import { useState } from 'react';
 import { RulesPanel } from './RulesPanel';
 
-export function HomeScreen({ onNewGame }: { onNewGame: () => void }) {
+export function HomeScreen({
+  resumable = false,
+  onResume,
+  onNewGame,
+}: {
+  resumable?: boolean;
+  onResume?: () => void;
+  onNewGame: () => void;
+}) {
   const [showRules, setShowRules] = useState(false);
 
   return (
@@ -14,7 +22,12 @@ export function HomeScreen({ onNewGame }: { onNewGame: () => void }) {
         <p className="home-tagline">Rug merchants of the medina</p>
 
         <div className="home-actions">
-          <button type="button" className="home-btn primary" onClick={onNewGame}>
+          {resumable && (
+            <button type="button" className="home-btn primary" onClick={onResume}>
+              Resume Game
+            </button>
+          )}
+          <button type="button" className={`home-btn ${resumable ? '' : 'primary'}`} onClick={onNewGame}>
             New Game
           </button>
           <button type="button" className="home-btn" onClick={() => setShowRules(true)}>

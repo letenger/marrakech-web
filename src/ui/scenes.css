@@ -246,7 +246,7 @@
 }
 
 .name-input::placeholder {
-  color: #b39a6f;
+  color: #8a6e44;
 }
 
 .name-input:focus {
@@ -260,7 +260,7 @@
   margin-top: 9px;
   font-size: 0.78rem;
   font-style: italic;
-  color: #9a7a4c;
+  color: #7a5d31;
 }
 
 .setup-actions {
@@ -590,4 +590,20 @@
 
 .over-actions .menu-item {
   color: #f0dfbe;
+}
+
+/* ============================================================================
+   REDUCED MOTION — honour the OS "reduce motion" setting. Animations collapse
+   to near-instant so the die, walk and scene transitions still resolve to the
+   right state without movement.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
