@@ -6,7 +6,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import App from '../src/App';
 import { GameScreen } from '../src/ui/GameScreen';
-import { defaultNames } from '../src/ui/players';
+import { defaultNames, defaultSeats } from '../src/ui/players';
 
 // jsdom here doesn't expose localStorage; provide a minimal in-memory shim.
 if (typeof globalThis.localStorage === 'undefined') {
@@ -33,7 +33,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const config = () => ({ count: 2, names: defaultNames() });
+const config = () => ({ count: 2, names: defaultNames(), seats: defaultSeats() });
 
 describe('scene navigation', () => {
   it('walks Home → Setup → Play', () => {
@@ -65,6 +65,23 @@ describe('turn flow', () => {
 
     // Landed on empty sand (no rent) → placement phase.
     expect(screen.getByText(/Place a rug next to Assam/i)).toBeTruthy();
+  });
+
+  it('auto-plays an AI seat without human input', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    vi.useFakeTimers();
+    // Player 0 (Peacock) is a greedy AI; nobody clicks anything.
+    const cfg = { count: 2, names: defaultNames(), seats: { ...defaultSeats(), c: 'greedy' as const } };
+    render(<GameScreen config={cfg} onExit={() => {}} />);
+
+    // Opens in Peacock's rotate phase; the AI driver should act on its own.
+    expect(screen.getByText(/Peacock to move/i)).toBeTruthy();
+
+    // Drive the timers through the AI's rotate → roll → walk → place chain.
+    act(() => void vi.advanceTimersByTime(4000));
+
+    // The AI completed its turn and handed off to player 1 (Saffron).
+    expect(screen.getByText(/Saffron/i)).toBeTruthy();
   });
 });
 

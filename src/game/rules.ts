@@ -12,6 +12,15 @@ import type { Assam, Cell, Colour, Facing, GameState, Player, Rug } from './type
 // The special Marrakech die: faces 1,2,2,3,3,4 (a 2 or 3 is twice as likely).
 const DIE_FACES: (1 | 2 | 3 | 4)[] = [1, 2, 2, 3, 3, 4];
 
+// The die's probability mass, for chance-node weighting in search.
+// (1→1/6, 2→2/6, 3→2/6, 4→1/6.)
+export const DIE_DISTRIBUTION: { value: 1 | 2 | 3 | 4; p: number }[] = [
+  { value: 1, p: 1 / 6 },
+  { value: 2, p: 2 / 6 },
+  { value: 3, p: 2 / 6 },
+  { value: 4, p: 1 / 6 },
+];
+
 export function rollDie(rng: Rng): 1 | 2 | 3 | 4 {
   return DIE_FACES[Math.floor(rng() * DIE_FACES.length)];
 }

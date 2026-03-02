@@ -20,5 +20,11 @@ export type PlayerNames = Record<Colour, string>;
 
 export const defaultNames = (): PlayerNames => ({ ...PLAYER_NAME });
 
+// Who controls a seat: the player, or one of the algorithmic agents.
+export type SeatKind = 'human' | 'random' | 'greedy' | 'search';
+export type SeatKinds = Record<Colour, SeatKind>;
+
+export const defaultSeats = (): SeatKinds => ({ c: 'human', y: 'human', r: 'human', p: 'human' });
+
 // The choices made on the Setup screen that define a match.
-export type GameConfig = { count: number; names: PlayerNames };
+export type GameConfig = { count: number; names: PlayerNames; seats: SeatKinds };

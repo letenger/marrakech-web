@@ -22,6 +22,11 @@ export default defineConfig([
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      // Allow intentionally-unused args (e.g. an Agent interface method that
+      // ignores the rng), matching the TS `_`-prefix convention.
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    },
   },
   // Tests and config files aren't part of the app's tsconfig — lint them
   // without the type-aware rules.
@@ -30,6 +35,9 @@ export default defineConfig([
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
 ])

@@ -8,23 +8,29 @@ import { useEffect, useState } from 'react';
 import type { Overlay } from './BoardView';
 import type { PaymentResult } from './PaymentPrompt';
 import type { GameConfig } from './players';
+import { defaultSeats } from './players';
 import { writeSave, clearSave } from './persistence';
 import { newGame } from '../game/setup';
-import { countConnectedColour, inBounds } from '../game/board';
+import { countConnectedColour } from '../game/board';
 import {
   assamPath,
-  isPlacementValid,
-  isRugValid,
   makePlacement,
   moveAssam,
-  nextRugId,
   rollDie,
   rotateAssam,
   scoreOf,
   settlePayment,
   winnerOf,
 } from '../game/rules';
-import type { Colour, Coord, GameState, Rug } from '../game/types';
+import {
+  advanceTurn,
+  candidateRug,
+  legalAnchors,
+  legalSeconds,
+  type Placement,
+} from '../game/moves';
+import { AGENTS } from '../game/ai/agents';
+import type { Colour, Coord, GameState } from '../game/types';
 
 type UI = {
   state: GameState;
@@ -35,47 +41,12 @@ type UI = {
 };
 
 const STEP_MS = 360; // pace of Assam's cell-by-cell walk
-
-const neighbours = (c: Coord): Coord[] => [
-  { col: c.col + 1, row: c.row },
-  { col: c.col - 1, row: c.row },
-  { col: c.col, row: c.row + 1 },
-  { col: c.col, row: c.row - 1 },
-];
-
-function candidate(state: GameState, a: Coord, b: Coord): Rug {
-  const colour = state.players[state.turnIndex].colour;
-  return { colour, id: nextRugId(state, colour), squares: [a, b] };
-}
-function validPair(state: GameState, a: Coord, b: Coord): boolean {
-  const rug = candidate(state, a, b);
-  return isPlacementValid(state, rug) && isRugValid(state, rug);
-}
-function legalAnchors(state: GameState): Coord[] {
-  return neighbours(state.assam.pos).filter(
-    (a) => inBounds(a) && neighbours(a).some((b) => validPair(state, a, b)),
-  );
-}
-function legalSeconds(state: GameState, anchor: Coord): Coord[] {
-  return neighbours(anchor).filter((b) => validPair(state, anchor, b));
-}
-
-// Advance to the next active player, or end the game.
-function advanceTurn(state: GameState): GameState {
-  const active = state.players.filter((p) => !p.out);
-  if (active.length <= 1) return { ...state, phase: 'gameover' };
-
-  let idx = state.turnIndex;
-  for (let k = 0; k < state.players.length; k++) {
-    idx = (idx + 1) % state.players.length;
-    if (!state.players[idx].out) break;
-  }
-  if (state.players[idx].rugsLeft === 0) return { ...state, turnIndex: idx, phase: 'gameover' };
-  return { ...state, turnIndex: idx, phase: 'rotate' };
-}
+const AI_TURN_MS = 650; // pause before an AI seat acts, so a human can follow
+const AI_PROMPT_MS = 1600; // how long an AI lets the rent popup linger
 
 export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
   const { names } = config;
+  const seats = config.seats ?? defaultSeats(); // resilient to older saves
   const nameOf = (s: GameState) => names[s.players[s.turnIndex].colour];
 
   function openingMessage(s: GameState): string {
@@ -114,6 +85,40 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
       writeSave({ config, state: ui.state });
     }
   }, [ui.state, gameOver, walking, config]);
+
+  const currentSeat = seats[state.players[state.turnIndex].colour];
+  const isAITurn = !gameOver && currentSeat !== 'human';
+
+  // Drive AI seats: when an agent controls the active seat, step it through the
+  // same rotate → roll → (acknowledge rent) → place actions a human would click,
+  // paced so a watcher can follow. Animations (dice tumble, walk) own the screen
+  // and resolve themselves, so we stand back while they run.
+  useEffect(() => {
+    if (!isAITurn || rolling !== null || walking) return;
+    const agent = AGENTS[currentSeat];
+    if (!agent) return;
+
+    let id: number;
+    if (prompt !== null) {
+      id = window.setTimeout(() => prompt.onContinue(), AI_PROMPT_MS);
+    } else if (state.phase === 'rotate') {
+      id = window.setTimeout(() => onRotate(agent.chooseRotation(state, Math.random)), AI_TURN_MS);
+    } else if (state.phase === 'move') {
+      id = window.setTimeout(() => onRoll(), AI_TURN_MS);
+    } else if (state.phase === 'place') {
+      id = window.setTimeout(() => {
+        const p = agent.choosePlacement(state, Math.random);
+        if (p) placeRug(p);
+        else finishTurn(state, `${nameOf(state)} has no legal rug — turn passes. `);
+      }, AI_TURN_MS);
+    } else {
+      return;
+    }
+    return () => window.clearTimeout(id);
+    // The handlers below close over the same `state`/`ui` this effect depends on,
+    // so they re-create in lockstep with it; listing the reactive values is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, rolling, walking, prompt, isAITurn, currentSeat]);
 
   function finishTurn(s: GameState, baseMessage: string) {
     const next = advanceTurn(s);
@@ -205,7 +210,11 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
   }
   function onPickSecond(second: Coord) {
     if (!ui.anchor) return;
-    const placed = makePlacement(state, candidate(state, ui.anchor, second));
+    placeRug({ anchor: ui.anchor, second });
+  }
+  // Lay a rug in one shot — used by the two-click human flow and by AI seats.
+  function placeRug(p: Placement) {
+    const placed = makePlacement(state, candidateRug(state, p.anchor, p.second));
     finishTurn(placed, `${nameOf(state)} placed a rug. `);
   }
   function onCancel() {
@@ -239,6 +248,7 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     message: ui.message,
     winner: ui.winner,
     busy,
+    isAITurn,
     gameOver,
     overlays,
     rolling,

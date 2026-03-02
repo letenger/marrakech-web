@@ -20,6 +20,7 @@ The board, rugs, and Assam are real photographed pieces; everything around them 
 - [How to play (the app)](#how-to-play-the-app)
 - [Tech stack](#tech-stack)
 - [Architecture](#architecture)
+- [AI opponents & evaluation](#ai-opponents--evaluation)
 - [Project structure](#project-structure)
 - [Design system](#design-system)
 - [Getting started](#getting-started)
@@ -35,6 +36,7 @@ The board, rugs, and Assam are real photographed pieces; everything around them 
 - **Multi-scene app** — title screen, player setup, the game, an in-game pause menu, and a final standings screen.
 - **Custom players** — 2–4 merchants, each renamable (defaults: Peacock, Saffron, Crimson, Amethyst).
 - **Save & resume** — the match is snapshotted to `localStorage`, so a refresh or "Resume Game" picks up exactly where you left off.
+- **AI opponents** — any seat can be a computer player (random, greedy, or an expectiminimax search agent), plus an eval-only LLM agent and a `npm run eval` harness for measuring them. See [AI opponents & evaluation](#ai-opponents--evaluation).
 - **Animated feedback** — a tumbling 3D die that lands on the rolled face, Assam pacing the board cell by cell, and a rent popup that itemises every dirham and point that changes hands.
 - **Accessible overlays** — dialogs trap focus, close on `Escape`, restore focus on close, and all motion honours `prefers-reduced-motion`.
 - **Photographic board** — pieces positioned in fractions of the real board image, so the layout scales responsively.
@@ -85,6 +87,7 @@ The game ends once the players still in it have placed all their rugs. Your **sc
 | Fonts | Cormorant Garamond (display) + Inter (body), via Google Fonts |
 | Lint | ESLint 10 + typescript-eslint (type-aware) |
 | Persistence | `localStorage` (save/resume) |
+| AI | Pure-engine agents (expectiminimax search) + an eval harness run with `tsx`; LLM agent via the Anthropic SDK |
 
 No state-management library and no CSS framework — state is plain React, and the look is bespoke CSS by design.
 
@@ -117,6 +120,78 @@ rotate ──▶ roll (dice overlay) ──▶ walk (cell by cell)
 
 ---
 
+## AI opponents & evaluation
+
+Any seat can be handed to a computer player from the Setup screen. Because the engine is pure, immutable, and rule-validating, the agents reuse it directly — they choose from the same `legalRotations` / `legalPlacements` the UI offers a human, so an agent can never make an illegal move or desync from the board.
+
+> **Deep dive:** [`docs/AI.md`](docs/AI.md) walks through every file — the move enumerator, the expectiminimax tree, the LLM validate-retry loop, the eval harness, and the debugging story — and generalises the recipe to any turn-based game.
+
+### The agent contract
+
+A Marrakech turn has **two decisions split by a chance event** — rotate → *roll the die* → place — so an agent isn't one `chooseMove`; it's two pure functions with the die in between, each given a seeded `rng` so even tie-breaking is reproducible:
+
+```ts
+interface Agent {
+  chooseRotation(state, rng): RotateChoice;       // before the roll
+  choosePlacement(state, rng): Placement | null;  // after the roll (null = pass)
+}
+```
+
+A parallel `AsyncAgent` interface (plus a `toAsync` lift) lets the I/O-bound LLM agent and the synchronous algorithmic agents run through one harness without making the pure agents async.
+
+### The agents
+
+| Agent | Strategy |
+|---|---|
+| **random** | Uniform choice over legal moves. The baseline every eval measures against. |
+| **greedy** | One-ply lookahead, no opponent model. Placement picks the best immediate board; rotation (chosen *before* the die) takes the **expected value over the die distribution**. Fast and surprisingly strong. |
+| **search** | Depth-2 **expectiminimax** over the real game tree: rotate/place are decision nodes, the die is a chance node. |
+
+All three share one evaluation function — `heuristic = scoreOf(me) − scoreOf(strongest opponent)`, with self-bankruptcy valued at −∞ — so an agent plays *competitively* (denying opponents), not just acquisitively, and never walks into rent it can't pay.
+
+The search agent models the turn structure explicitly and rests on three invariants:
+
+1. **Chance nodes always average** — `Σ p(die) · childValue` — whoever is moving; you take the die's expectation, you can't optimise over it. (That "optimise over choices, average over chance" shape is what makes it *expecti*minimax.)
+2. **Decision nodes flip perspective** — maximise the heuristic at my nodes, **minimise** it at opponents' nodes, since they play for themselves.
+3. **Depth is deliberately shallow** (`DEPTH = 2`): branching is rotations (3) × die outcomes (4) × placements (~dozen), so cost climbs fast and the agent must stay responsive in the browser.
+
+### In the UI
+
+The "vs Computer" driver is one `useEffect` in `useTurnFlow` that, on an AI seat, calls the **same handlers a human clicks** (`onRotate`, `onRoll`, `placeRug`) on a short timer — so the dice tumble, the cell-by-cell walk, the rent popup, and `localStorage` persistence all keep working unchanged. The AI is a synthetic clicker, not a bypass; it waits out animations and disables the human controls while it acts.
+
+### Eval harness
+
+`npm run eval` plays N **seeded** (reproducible) games between any two agents, alternating the first seat to cancel first-mover bias, and reports win rate, illegal-move rate, decision latency, and game length:
+
+```bash
+npm run eval                       # greedy vs random, 50 games
+npm run eval -- search greedy 100  # 100 games, search vs greedy
+npm run eval -- llm greedy 20      # LLM (needs ANTHROPIC_API_KEY) vs greedy
+```
+
+Sample run:
+
+```
+Match: search vs greedy  —  30 games, 0 ties, avg 45 turns
+  search   wins  19 ( 63%)   illegal    0   avg latency 342.6ms
+  greedy   wins  11 ( 37%)   illegal    0   avg latency   0.1ms
+```
+
+> The harness earned its keep: an early `search` scored **30%** — losing to `greedy` — because it optimistically maximised *its own* score at opponent nodes instead of modelling them as adversaries. Flipping to minimise at opponent nodes took it to **63%**. The eval is what surfaced a smarter-*looking* agent that was actually playing worse, and turned the fix into a verifiable number.
+
+### LLM opponent
+
+[`src/game/ai/llm.ts`](src/game/ai/llm.ts) is a **provider-agnostic** agent behind a one-function seam — `complete(prompt) => Promise<string>`, so swapping Anthropic / OpenAI / a fake is one adapter. It:
+
+1. **Serialises** the board to a text grid (`.`/colour/`@`) and lists the legal placements **with indices**, so the model picks from a constrained menu rather than emitting free-form coordinates.
+2. **Parses tolerantly** — brace-matches the first balanced `{…}`, so prose or ```` ```json ```` fences around the answer are fine.
+3. **Validates strictly** against the *actual* legal set — the engine decides legality, never the model.
+4. **Retries with the error fed back**, and after the budget (default 2) **falls back to the greedy agent** — so it can never stall the game or play an illegal move.
+
+This validate-and-retry-with-fallback loop is the core reliability pattern for putting a fuzzy model behind a strict interface. The agent is **eval-only**: it runs in the Node harness where the API key lives in an env var and is never bundled into the browser; the in-browser "vs Computer" opponent uses the algorithmic agents. Its tests run fully offline against a fake `complete`.
+
+---
+
 ## Project structure
 
 ```
@@ -126,14 +201,19 @@ src/
 │   ├── types.ts         #   GameState, Player, Rug, Coord, …
 │   ├── board.ts         #   board queries (adjacency, connected regions, counts)
 │   ├── rules.ts         #   the rules: rotate, move, place, pay, score, winner
+│   ├── moves.ts         #   legal-move enumeration + apply (shared by UI, AI, eval)
 │   ├── setup.ts         #   newGame(): a fresh, deterministic board
-│   └── io.ts            #   serialize/parse (the assignment's game-string format)
+│   ├── io.ts            #   serialize/parse (the assignment's game-string format)
+│   └── ai/              #   ── agents (pure, engine-only) ──
+│       ├── agent.ts     #     Agent / AsyncAgent contracts
+│       ├── agents.ts    #     random, greedy, expectiminimax search
+│       └── llm.ts       #     provider-agnostic LLM agent + validate-retry loop
 ├── ui/                  # ── React components ──
 │   ├── BoardView.tsx    #   photographic board + positioned rug/Assam pieces
 │   ├── GameScreen.tsx   #   play scene — thin renderer over useTurnFlow
-│   ├── useTurnFlow.ts   #   the turn engine: state + roll/walk timer chain + persistence
+│   ├── useTurnFlow.ts   #   the turn engine: state + roll/walk chain + AI auto-play + persistence
 │   ├── HomeScreen.tsx   #   title screen (New Game / Resume / How to Play)
-│   ├── SetupScreen.tsx  #   player count + custom names
+│   ├── SetupScreen.tsx  #   player count, custom names, per-seat human/AI choice
 │   ├── GameMenu.tsx     #   pause overlay
 │   ├── GameOver.tsx     #   final standings
 │   ├── RulesPanel.tsx   #   shared rules drawer
@@ -143,12 +223,17 @@ src/
 │   ├── ScorePanel.tsx   #   per-player dirhams / rugs / score
 │   ├── useDialog.ts     #   overlay a11y: focus trap, Escape, focus restore
 │   ├── persistence.ts   #   save/resume via localStorage
-│   ├── players.ts       #   colour palette, default names, GameConfig
+│   ├── players.ts       #   palette, default names, GameConfig, seat kinds
 │   ├── game.css         #   design tokens + in-game chrome
 │   └── scenes.css       #   scenes + overlays + reduced-motion
 └── main.tsx             # React entry point
 
-tests/                   # Vitest specs: rules, setup, io (fixtures), and UI interaction
+eval/                    # AI eval harness (Node, run with tsx — outside the app build)
+├── arena.ts             #   play seeded games between agents; aggregate metrics
+├── anthropic.ts         #   Anthropic-backed `complete` adapter for the LLM agent
+└── run.ts               #   CLI entry — `npm run eval`
+
+tests/                   # Vitest specs: rules, moves, setup, io, agents, llm, and UI interaction
 ```
 
 ---
@@ -178,6 +263,7 @@ npm run build      # type-check and build for production → dist/
 npm run preview    # preview the production build locally
 npm test           # run the test suite
 npm run lint       # lint
+npm run eval       # play AI agents against each other (see AI section)
 ```
 
 ---
@@ -200,7 +286,8 @@ npm run test:watch  # watch mode
 
 This is a faithful adaptation with a couple of deliberate gaps, and room to grow:
 
-- **Hot-seat only** — all players share one device. No online play and no AI opponent yet; an AI merchant would be the natural next feature.
+- **Local play** — humans and AI agents share one device. No online/networked multiplayer yet; an authoritative server reusing the same rule functions for validation would be the natural next step.
+- **Search depth** — the expectiminimax agent looks two plies ahead with no pruning, so it's deliberately shallow for responsiveness. Alpha-beta / move ordering would let it search deeper.
 - **Lossy assignment format** — `game/io.ts` (the Java game-string format) is kept for its tests but isn't used for save/resume, since it drops turn order, phase, and names. Live saves use a full JSON snapshot instead.
 - **Asset size** — `board.png` is ~900 KB; converting it to WebP would roughly halve initial load (skipped here only because no WebP encoder was available locally).
 

@@ -47,8 +47,8 @@ export function GameScreen({
             message={flow.message}
             winner={flow.winner}
             names={names}
-            busy={flow.busy}
-            canCancel={flow.canCancel}
+            busy={flow.busy || flow.isAITurn}
+            canCancel={flow.canCancel && !flow.isAITurn}
             onRotate={flow.onRotate}
             onRoll={flow.onRoll}
             onCancel={flow.onCancel}
