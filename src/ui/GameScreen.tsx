@@ -10,7 +10,7 @@ import { GameMenu } from './GameMenu';
 import { GameOver } from './GameOver';
 import type { GameConfig } from './players';
 import { useTurnFlow } from './useTurnFlow';
-import type { GameState } from '../game/types';
+import type { GameState } from '@marrakech/engine';
 
 export type { GameConfig };
 

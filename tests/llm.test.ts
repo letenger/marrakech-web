@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { newGame } from '../src/game/setup';
-import { llmAgent, fakeComplete } from '../src/game/ai/llm';
-import type { Complete, IllegalMove } from '../src/game/ai/llm';
-import { legalRotations, legalPlacements } from '../src/game/moves';
+import {
+  newGame,
+  llmAgent,
+  fakeComplete,
+  legalRotations,
+  legalPlacements,
+  type Complete,
+  type IllegalMove,
+} from '@marrakech/engine';
 
 const rng0 = () => 0; // Assam centre (3,3), facing N
 

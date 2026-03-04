@@ -1,5 +1,5 @@
 // Turn controls. Which buttons are enabled depends on the current phase.
-import type { Colour, GameState } from '../game/types';
+import type { Colour, GameState } from '@marrakech/engine';
 import type { PlayerNames } from './players';
 
 export type Controls = {

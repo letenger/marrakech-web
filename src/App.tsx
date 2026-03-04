@@ -6,7 +6,7 @@ import { SetupScreen } from './ui/SetupScreen';
 import { GameScreen } from './ui/GameScreen';
 import type { GameConfig } from './ui/players';
 import { loadSave } from './ui/persistence';
-import type { GameState } from './game/types';
+import type { GameState } from '@marrakech/engine';
 import './ui/game.css';
 import './ui/scenes.css';
 

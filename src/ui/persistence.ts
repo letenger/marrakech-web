@@ -5,7 +5,7 @@
 // reusing game/io.ts: that game-string format is the Java assignment's import/
 // export and is lossy — it drops turnIndex, phase and custom names, all of which
 // a faithful resume needs. GameState is plain JSON-serialisable data.
-import type { GameState } from '../game/types';
+import type { GameState } from '@marrakech/engine';
 import type { GameConfig } from './players';
 
 export type SavedGame = { config: GameConfig; state: GameState };

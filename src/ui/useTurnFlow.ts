@@ -10,9 +10,9 @@ import type { PaymentResult } from './PaymentPrompt';
 import type { GameConfig } from './players';
 import { defaultSeats } from './players';
 import { writeSave, clearSave } from './persistence';
-import { newGame } from '../game/setup';
-import { countConnectedColour } from '../game/board';
 import {
+  newGame,
+  countConnectedColour,
   assamPath,
   makePlacement,
   moveAssam,
@@ -21,16 +21,16 @@ import {
   scoreOf,
   settlePayment,
   winnerOf,
-} from '../game/rules';
-import {
   advanceTurn,
   candidateRug,
   legalAnchors,
   legalSeconds,
+  AGENTS,
   type Placement,
-} from '../game/moves';
-import { AGENTS } from '../game/ai/agents';
-import type { Colour, Coord, GameState } from '../game/types';
+  type Colour,
+  type Coord,
+  type GameState,
+} from '@marrakech/engine';
 
 type UI = {
   state: GameState;

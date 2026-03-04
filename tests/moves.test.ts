@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { newGame } from '../src/game/setup';
 import {
+  newGame,
   legalRotations,
   legalAnchors,
   legalPlacements,
   applyRotation,
   applyPlacement,
   advanceTurn,
-} from '../src/game/moves';
-import { makePlacement } from '../src/game/rules';
-import type { GameState } from '../src/game/types';
+  makePlacement,
+  type GameState,
+} from '@marrakech/engine';
 
 const rng0 = () => 0; // Assam centre (3,3), facing N
 

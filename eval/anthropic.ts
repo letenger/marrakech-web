@@ -2,7 +2,7 @@
 // Reads ANTHROPIC_API_KEY from the environment; never imported by the app, so
 // no key ever reaches the browser bundle.
 import Anthropic from '@anthropic-ai/sdk';
-import type { Complete } from '../src/game/ai/llm';
+import type { Complete } from '@marrakech/engine';
 
 export type AnthropicOptions = { model?: string; maxTokens?: number };
 

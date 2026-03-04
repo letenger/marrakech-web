@@ -2,7 +2,7 @@
 // decide who controls each seat (you or one of the AI agents). Hands a finished
 // config back to App when Start is pressed.
 import { useState } from 'react';
-import type { Colour } from '../game/types';
+import type { Colour } from '@marrakech/engine';
 import { PLAYER_HEX, PLAYER_NAME, defaultNames, defaultSeats } from './players';
 import type { GameConfig, SeatKind } from './players';
 

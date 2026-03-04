@@ -13,9 +13,12 @@ import {
   getPaymentAmount,
   isGameOver,
   getWinner,
-} from '../src/game/rules';
-import { newGame } from '../src/game/setup';
-import type { Assam, Facing, GameState, Rug } from '../src/game/types';
+  newGame,
+  type Assam,
+  type Facing,
+  type GameState,
+  type Rug,
+} from '@marrakech/engine';
 
 const here = dirname(fileURLToPath(import.meta.url));
 

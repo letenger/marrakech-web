@@ -4,18 +4,21 @@
 // agent", not just call one.
 //
 // Runs under tsx as a plain Node script, so timers and RNG are unrestricted.
-import { newGame } from '../src/game/setup';
 import {
+  newGame,
   rollDie,
   moveAssam,
   settlePayment,
   isGameOver,
   winnerOf,
   scoreOf,
-} from '../src/game/rules';
-import { applyRotation, applyPlacement, legalPlacements } from '../src/game/moves';
-import type { AsyncAgent } from '../src/game/ai/agent';
-import type { Colour, GameState } from '../src/game/types';
+  applyRotation,
+  applyPlacement,
+  legalPlacements,
+  type AsyncAgent,
+  type Colour,
+  type GameState,
+} from '@marrakech/engine';
 
 // A small seedable PRNG (mulberry32) so each game is reproducible from a seed.
 function makeRng(seed: number): () => number {

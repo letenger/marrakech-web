@@ -1,4 +1,4 @@
-import type { Colour } from '../game/types';
+import type { Colour } from '@marrakech/engine';
 
 export const PLAYER_HEX: Record<Colour, string> = {
   c: '#1FA8B8',

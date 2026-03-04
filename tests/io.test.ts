@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parse, serialize } from '../src/game/io';
-import { newGame } from '../src/game/setup';
-import { makePlacement } from '../src/game/rules';
-import type { GameState, Rug } from '../src/game/types';
+import { parse, serialize, newGame, makePlacement, type GameState, type Rug } from '@marrakech/engine';
 
 // A fresh 2-player game (Assam faces N), empty board. 2 players start with 24 rugs.
 const EMPTY_BOARD = 'B' + 'n00'.repeat(49);

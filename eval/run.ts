@@ -6,9 +6,7 @@
 //   npm run eval -- llm greedy 20     # LLM (needs ANTHROPIC_API_KEY) vs greedy
 //
 // Agents: random | greedy | search | llm
-import { AGENTS } from '../src/game/ai/agents';
-import { toAsync } from '../src/game/ai/agent';
-import { llmAgent } from '../src/game/ai/llm';
+import { AGENTS, toAsync, llmAgent } from '@marrakech/engine';
 import { runMatch, formatReport, type AgentFactory } from './arena';
 import { anthropicComplete } from './anthropic';
 

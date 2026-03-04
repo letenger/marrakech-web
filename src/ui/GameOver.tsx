@@ -1,8 +1,6 @@
 // End-of-game scene: announces the winner and the final standings, then
 // offers a rematch (same players) or a trip back to the main menu.
-import type { Colour, GameState } from '../game/types';
-import { scoreOf } from '../game/rules';
-import { countColour } from '../game/board';
+import { scoreOf, countColour, type Colour, type GameState } from '@marrakech/engine';
 import { PLAYER_HEX } from './players';
 import type { PlayerNames } from './players';
 import { useDialog } from './useDialog';

@@ -1,7 +1,7 @@
 // A turn-result prompt: pops up after Assam lands on another player's rug to
 // spell out the rent — who pays whom, how many dirhams, and the resulting
 // scores — before play continues. Dismissed with Continue.
-import type { Colour } from '../game/types';
+import type { Colour } from '@marrakech/engine';
 import { PLAYER_HEX } from './players';
 import type { PlayerNames } from './players';
 import { useDialog } from './useDialog';

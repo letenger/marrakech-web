@@ -15,6 +15,12 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* Resolve the workspace engine to its TS source; it is typechecked
+       transitively here, and in isolation (DOM-free) via its own tsconfig. */
+    "paths": {
+      "@marrakech/engine": ["./packages/engine/src/index.ts"]
+    },
+
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,

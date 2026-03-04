@@ -8,7 +8,7 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,
       tseslint.configs.recommendedTypeChecked,
@@ -28,10 +28,10 @@ export default defineConfig([
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
-  // Tests and config files aren't part of the app's tsconfig — lint them
-  // without the type-aware rules.
+  // Tests, eval scripts, and config files aren't part of the app's tsconfig —
+  // lint them without the type-aware rules.
   {
-    files: ['tests/**/*.{ts,tsx}', '*.{ts,js}'],
+    files: ['tests/**/*.{ts,tsx}', 'eval/**/*.{ts,tsx}', '*.{ts,js}'],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },

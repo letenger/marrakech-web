@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { newGame, INITIAL_DIRHAMS, rugsForPlayers } from '../src/game/setup';
-import { BOARD_SIZE } from '../src/game/types';
+import { newGame, INITIAL_DIRHAMS, rugsForPlayers } from '@marrakech/engine';
+import { BOARD_SIZE } from '@marrakech/engine';
 
 // A fake rng that always returns 0 -> picks the first option every time.
 const rng0 = () => 0;

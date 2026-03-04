@@ -1,7 +1,6 @@
 // Shows each player's money (dirhams) and rugs left, with a real coin image.
 import type { CSSProperties } from 'react';
-import type { GameState } from '../game/types';
-import { scoreOf } from '../game/rules';
+import { scoreOf, type GameState } from '@marrakech/engine';
 import { PLAYER_HEX } from './players';
 import type { PlayerNames } from './players';
 import coinGold from '../assets/coin_gold.png';

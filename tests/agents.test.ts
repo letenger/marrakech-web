@@ -1,10 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { newGame } from '../src/game/setup';
-import { randomAgent, greedyAgent, searchAgent, AGENTS } from '../src/game/ai/agents';
-import { legalRotations, legalPlacements, applyRotation, applyPlacement } from '../src/game/moves';
-import { moveAssam, rollDie, settlePayment, isGameOver } from '../src/game/rules';
-import type { Agent } from '../src/game/ai/agent';
-import type { GameState } from '../src/game/types';
+import {
+  newGame,
+  randomAgent,
+  greedyAgent,
+  searchAgent,
+  AGENTS,
+  legalRotations,
+  legalPlacements,
+  applyRotation,
+  applyPlacement,
+  moveAssam,
+  rollDie,
+  settlePayment,
+  isGameOver,
+  type Agent,
+  type GameState,
+} from '@marrakech/engine';
 
 // A deterministic rng so an agent's tie-breaking is reproducible in tests.
 function seeded(seed: number) {

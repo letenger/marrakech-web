@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { parse, parseRug, serialize } from '../src/game/io';
+import { parse, parseRug, serialize } from '@marrakech/engine';
 import {
   getPaymentAmount,
   isPlacementValid,
@@ -13,7 +13,7 @@ import {
   makePlacement,
   isGameOver,
   getWinner,
-} from '../src/game/rules';
+} from '@marrakech/engine';
 
 const here = dirname(fileURLToPath(import.meta.url));
 

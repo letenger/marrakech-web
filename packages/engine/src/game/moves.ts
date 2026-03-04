@@ -5,7 +5,7 @@
 // A Marrakech turn has two decision points with a chance event between them:
 //   rotate (choose) → roll the die (chance) → place a rug (choose)
 // so moves are enumerated in two families: rotations and placements.
-import { inBounds, isAdjacent } from './board';
+import { inBounds } from './board';
 import {
   isPlacementValid,
   isRugValid,
@@ -97,7 +97,3 @@ export function applyPlacement(state: GameState, p: Placement): GameState {
   const placed = makePlacement(state, candidateRug(state, p.anchor, p.second));
   return advanceTurn(placed);
 }
-
-// Whether the two squares are edge-adjacent — re-exported for agents that score
-// positions without importing board internals directly.
-export { isAdjacent };
