@@ -20,8 +20,9 @@ export type PlayerNames = Record<Colour, string>;
 
 export const defaultNames = (): PlayerNames => ({ ...PLAYER_NAME });
 
-// Who controls a seat: the player, or one of the algorithmic agents.
-export type SeatKind = 'human' | 'random' | 'greedy' | 'search';
+// Who controls a seat: the player, one of the local algorithmic agents, or the
+// server-hosted LLM opponent (which calls the API).
+export type SeatKind = 'human' | 'random' | 'greedy' | 'search' | 'llm';
 export type SeatKinds = Record<Colour, SeatKind>;
 
 export const defaultSeats = (): SeatKinds => ({ c: 'human', y: 'human', r: 'human', p: 'human' });

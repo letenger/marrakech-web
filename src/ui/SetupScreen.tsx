@@ -16,6 +16,7 @@ const SEAT_KINDS: { kind: SeatKind; label: string }[] = [
   { kind: 'random', label: 'AI · Random' },
   { kind: 'greedy', label: 'AI · Greedy' },
   { kind: 'search', label: 'AI · Search' },
+  { kind: 'llm', label: 'AI · LLM' },
 ];
 const seatLabel = (k: SeatKind) => SEAT_KINDS.find((s) => s.kind === k)!.label;
 

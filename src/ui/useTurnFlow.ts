@@ -26,11 +26,13 @@ import {
   legalAnchors,
   legalSeconds,
   AGENTS,
+  greedyAgent,
   type Placement,
   type Colour,
   type Coord,
   type GameState,
 } from '@marrakech/engine';
+import { fetchAiRotation, fetchAiPlacement } from './aiClient';
 
 type UI = {
   state: GameState;
@@ -88,25 +90,63 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
 
   const currentSeat = seats[state.players[state.turnIndex].colour];
   const isAITurn = !gameOver && currentSeat !== 'human';
+  const isLlmTurn = isAITurn && currentSeat === 'llm';
 
   // Drive AI seats: when an agent controls the active seat, step it through the
   // same rotate → roll → (acknowledge rent) → place actions a human would click,
-  // paced so a watcher can follow. Animations (dice tumble, walk) own the screen
-  // and resolve themselves, so we stand back while they run.
+  // paced so a watcher can follow. Local agents (random/greedy/search) decide
+  // synchronously; the 'llm' seat asks the API, so its rotate/place branches
+  // await a fetch, guard against a stale apply (state changed / unmounted), and
+  // fall back to a local greedy move if the server is unreachable — the game
+  // never hangs on a bad network. Animations own the screen; we stand back.
   useEffect(() => {
     if (!isAITurn || rolling !== null || walking) return;
+
+    let cancelled = false;
+    let timer: number;
+
+    // Acknowledging the rent popup and rolling the die are identical for every
+    // AI seat, LLM included.
+    if (prompt !== null) {
+      timer = window.setTimeout(() => prompt.onContinue(), AI_PROMPT_MS);
+      return () => window.clearTimeout(timer);
+    }
+    if (state.phase === 'move') {
+      timer = window.setTimeout(() => onRoll(), AI_TURN_MS);
+      return () => window.clearTimeout(timer);
+    }
+
+    if (isLlmTurn) {
+      // Async: fetch the move, then apply only if still this exact turn.
+      if (state.phase === 'rotate') {
+        timer = window.setTimeout(() => {
+          void fetchAiRotation(state)
+            .catch(() => greedyAgent.chooseRotation(state, Math.random)) // API down → local
+            .then((deg) => { if (!cancelled) onRotate(deg); });
+        }, AI_TURN_MS);
+      } else if (state.phase === 'place') {
+        timer = window.setTimeout(() => {
+          void fetchAiPlacement(state)
+            .catch(() => greedyAgent.choosePlacement(state, Math.random))
+            .then((p) => {
+              if (cancelled) return;
+              if (p) placeRug(p);
+              else finishTurn(state, `${nameOf(state)} has no legal rug — turn passes. `);
+            });
+        }, AI_TURN_MS);
+      } else {
+        return;
+      }
+      return () => { cancelled = true; window.clearTimeout(timer); };
+    }
+
+    // Local synchronous agents.
     const agent = AGENTS[currentSeat];
     if (!agent) return;
-
-    let id: number;
-    if (prompt !== null) {
-      id = window.setTimeout(() => prompt.onContinue(), AI_PROMPT_MS);
-    } else if (state.phase === 'rotate') {
-      id = window.setTimeout(() => onRotate(agent.chooseRotation(state, Math.random)), AI_TURN_MS);
-    } else if (state.phase === 'move') {
-      id = window.setTimeout(() => onRoll(), AI_TURN_MS);
+    if (state.phase === 'rotate') {
+      timer = window.setTimeout(() => onRotate(agent.chooseRotation(state, Math.random)), AI_TURN_MS);
     } else if (state.phase === 'place') {
-      id = window.setTimeout(() => {
+      timer = window.setTimeout(() => {
         const p = agent.choosePlacement(state, Math.random);
         if (p) placeRug(p);
         else finishTurn(state, `${nameOf(state)} has no legal rug — turn passes. `);
@@ -114,11 +154,11 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     } else {
       return;
     }
-    return () => window.clearTimeout(id);
+    return () => window.clearTimeout(timer);
     // The handlers below close over the same `state`/`ui` this effect depends on,
     // so they re-create in lockstep with it; listing the reactive values is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, rolling, walking, prompt, isAITurn, currentSeat]);
+  }, [state, rolling, walking, prompt, isAITurn, isLlmTurn, currentSeat]);
 
   function finishTurn(s: GameState, baseMessage: string) {
     const next = advanceTurn(s);

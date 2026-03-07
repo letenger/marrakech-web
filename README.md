@@ -181,14 +181,34 @@ Match: search vs greedy  —  30 games, 0 ties, avg 45 turns
 
 ### LLM opponent
 
-[`src/game/ai/llm.ts`](src/game/ai/llm.ts) is a **provider-agnostic** agent behind a one-function seam — `complete(prompt) => Promise<string>`, so swapping Anthropic / OpenAI / a fake is one adapter. It:
+[`packages/engine/src/game/ai/llm.ts`](packages/engine/src/game/ai/llm.ts) is a **provider-agnostic** agent behind a one-function seam — `complete(prompt) => Promise<string>`, so swapping Anthropic / OpenAI / a fake is one adapter. It:
 
 1. **Serialises** the board to a text grid (`.`/colour/`@`) and lists the legal placements **with indices**, so the model picks from a constrained menu rather than emitting free-form coordinates.
 2. **Parses tolerantly** — brace-matches the first balanced `{…}`, so prose or ```` ```json ```` fences around the answer are fine.
 3. **Validates strictly** against the *actual* legal set — the engine decides legality, never the model.
 4. **Retries with the error fed back**, and after the budget (default 2) **falls back to the greedy agent** — so it can never stall the game or play an illegal move.
 
-This validate-and-retry-with-fallback loop is the core reliability pattern for putting a fuzzy model behind a strict interface. The agent is **eval-only**: it runs in the Node harness where the API key lives in an env var and is never bundled into the browser; the in-browser "vs Computer" opponent uses the algorithmic agents. Its tests run fully offline against a fake `complete`.
+This validate-and-retry-with-fallback loop is the core reliability pattern for putting a fuzzy model behind a strict interface. The API key lives only on the **server** (`apps/api`), so the LLM opponent is playable in the browser without ever exposing the key. Its tests run fully offline against a fake `complete`.
+
+### The API server (`apps/api`)
+
+A small [Hono](https://hono.dev) service on Node holds the LLM key and persists games, so the browser can face the LLM opponent and resume games across devices.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Liveness. |
+| `POST` | `/api/ai-move` | Body `{ state, phase }` → a legal `{ rotation }` or `{ placement }`. The server re-derives legal moves from the posted state, so it can never return an illegal move — the client is never trusted for legality. |
+| `POST` / `GET` / `PUT` | `/api/games[/:id]` | Save / load / update a game (SQLite via `node:sqlite`, behind a `GameStore` interface that a Postgres impl can replace). |
+
+Zod validates every body; CORS is locked to the web origin; `/api/ai-move` is rate-limited (it spends money). The app is a `createApp({ complete, store })` factory, so tests inject a fake model and an in-memory store — no key, no disk.
+
+```bash
+cp .env.example .env      # add your ANTHROPIC_API_KEY
+npm run dev:api           # API on http://localhost:8787
+npm run dev               # web on http://localhost:5173 (in another shell)
+```
+
+Then in **Setup**, tap a seat until it reads **AI · LLM**. Full end-to-end architecture and deployment (Vercel + Fly.io) are in [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ---
 
