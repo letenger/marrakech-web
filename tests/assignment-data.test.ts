@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { parse, parseRug, serialize } from '@marrakech/engine';
+import { parse, parseRug, serialize } from './helpers/gameString';
 import {
   getPaymentAmount,
   isPlacementValid,

@@ -29,7 +29,7 @@ the same recipe transfers to any turn-based game.
 ## 1. The architectural precondition
 
 None of this works cheaply unless the rules layer obeys three constraints, all of
-which `src/game/` already did before any AI existed:
+which `packages/engine/src/game/` already did before any AI existed:
 
 - **Pure** — every rule is `(GameState, …) -> GameState`, no mutation, no I/O,
   no `Date.now()`, no module-level state.
@@ -46,7 +46,7 @@ search over fresh immutable states just recurses.
 
 ## Step 1 — Enumerate legal moves in the pure core
 
-**File:** [`src/game/moves.ts`](../src/game/moves.ts)
+**File:** [`packages/engine/src/game/moves.ts`](../packages/engine/src/game/moves.ts)
 
 Before agents existed, "what can I do right now?" lived inside the UI hook. The
 first move was to lift it into the engine so the **UI, the agents, and the eval
@@ -93,7 +93,7 @@ state to one of the listed actions, and the rest of this document is plumbing.
 
 ## Step 2 — The agent contract
 
-**File:** [`src/game/ai/agent.ts`](../src/game/ai/agent.ts)
+**File:** [`packages/engine/src/game/ai/agent.ts`](../packages/engine/src/game/ai/agent.ts)
 
 Because a turn has two decision points, an agent is **not** a single
 `chooseMove(state)`. Modelling it that way would force the die roll and the
@@ -140,7 +140,7 @@ accommodating the I/O case.
 
 ## Step 3 — Algorithmic agents
 
-**File:** [`src/game/ai/agents.ts`](../src/game/ai/agents.ts)
+**File:** [`packages/engine/src/game/ai/agents.ts`](../packages/engine/src/game/ai/agents.ts)
 
 Three agents, built weakest-to-strongest so each is a baseline for the next.
 
@@ -307,7 +307,7 @@ Design principles that matter here:
 
 ## Step 5 — The LLM agent
 
-**File:** [`src/game/ai/llm.ts`](../src/game/ai/llm.ts)
+**File:** [`packages/engine/src/game/ai/llm.ts`](../packages/engine/src/game/ai/llm.ts)
 
 This is the part that demonstrates *AI-application* engineering: putting a fuzzy,
 fallible model behind a strict interface so the rest of the system can trust it.
@@ -374,12 +374,14 @@ Four properties make this robust:
 The optional `onIllegalMove` callback is the hook the eval uses to *count* how
 often the model strays — turning reliability into a measured number.
 
-### Eval-only by construction
+### Key stays server-side by construction
 
-The LLM agent lives in `src/game/ai/` but is imported **only** by the eval
-harness, never by the React app, so no API key ever reaches the browser bundle.
-The `Complete` seam is what permits this: the app could in principle use it via a
-backend proxy, but today it doesn't, and the key stays server-side.
+The LLM agent lives in `packages/engine/src/game/ai/`, but the `complete` function
+it depends on is only ever supplied where a key is safe: the **eval harness**
+(Node) and the **API server** (`apps/api`). The React app never constructs a
+real `complete` — it calls the API's `/api/ai-move` over HTTP — so no API key
+reaches the browser bundle. The `Complete` seam is what permits this: the server
+*is* a `Complete` implementation reached over the network.
 
 ---
 
@@ -513,9 +515,16 @@ Roughly increasing effort:
   for connected-territory size, rug economy (rugs left vs board filled), or
   Assam-position threat. The eval will tell you immediately whether a new term
   helps — change it, run `npm run eval -- search greedy 100`, compare win rate.
-- **Alpha-beta pruning.** The search is plain expectiminimax with no pruning.
-  Adding alpha-beta (with move ordering by the one-ply heuristic) would let it go
-  deeper than `DEPTH = 2` at the same cost.
+- **Deeper search (★-minimax pruning).** The search is plain expectiminimax with
+  no pruning, held at `DEPTH = 2` because the branching factor — rotations (3) ×
+  die faces (4) × placements (~a dozen) per ply — makes depth 3 measurably
+  unusable (minutes per game; measured with `npm run eval`). Plain **alpha-beta
+  does not apply** here: the max/min decision nodes sit *above* chance (die)
+  nodes, and you can't bound a chance node's expectation until its children are
+  evaluated. The correct optimisation is **★-minimax (star1/star2) pruning**,
+  which carries running bounds through the chance node and prunes once the
+  parent's window is exceeded — pairing that with move ordering (by the one-ply
+  heuristic) is what would let the search go deeper at the same cost.
 - **More eval metrics.** `rentPaid` is already tracked per game but not yet
   surfaced in the report; average rent extracted/paid is a good strategic signal.
 - **A second LLM provider.** Write an `openaiComplete` next to `anthropicComplete`

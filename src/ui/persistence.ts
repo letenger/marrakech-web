@@ -1,10 +1,9 @@
 // Save / resume support: snapshot the live match to localStorage so a refresh
 // or "Resume" picks up exactly where the player left off.
 //
-// We store the full UI-level snapshot as JSON (config + GameState) rather than
-// reusing game/io.ts: that game-string format is the Java assignment's import/
-// export and is lossy — it drops turnIndex, phase and custom names, all of which
-// a faithful resume needs. GameState is plain JSON-serialisable data.
+// We store the full UI-level snapshot as JSON (config + GameState). GameState is
+// plain JSON-serialisable data, so this loses nothing — turnIndex, phase, and
+// custom names all round-trip, which a faithful resume needs.
 import type { GameState } from '@marrakech/engine';
 import type { GameConfig } from './players';
 

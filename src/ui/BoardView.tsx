@@ -3,7 +3,7 @@
 // Pieces are positioned in *fractions of the board image*, measured from the
 // printed grid, so everything scales responsively with the board.
 import type { Colour, Coord, GameState, Rug } from '@marrakech/engine';
-import boardImg from '../assets/board.png';
+import boardImg from '../assets/board.webp';
 import assamImg from '../assets/assam.png';
 import rugCyan from '../assets/rug_cyan.png';
 import rugYellow from '../assets/rug_yellow.png';

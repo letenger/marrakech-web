@@ -86,7 +86,14 @@ export const greedyAgent: Agent = {
 // Depth-limited search where the die is a chance node weighted by the real
 // 1/2/2/3/3/4 distribution. The mover maximises the heuristic; we model the
 // turn structure (rotate → chance → place) and look DEPTH plies ahead.
-
+//
+// No pruning: the branching factor is rotations (3) × die faces (4) × placements
+// (up to ~a dozen) per ply, so cost is ~(3·4·12)^DEPTH. Depth 2 decides in
+// hundreds of ms (fine for the browser); depth 3 blows past minutes per game
+// and is unusable — measured with `npm run eval`. Plain alpha-beta does NOT
+// apply here (the max/min nodes sit above chance nodes, whose partial
+// expectation can't be bounded mid-sum); the correct deeper-search optimisation
+// is *-minimax (star1/star2) pruning, noted as future work in docs/AI.md.
 const DEPTH = 2; // plies of (rotate+place) lookahead; kept small for speed
 
 // Value of the position once Assam has landed and it is time to place a rug.

@@ -26,6 +26,7 @@ The board, rugs, and Assam are real photographed pieces; everything around them 
 - [Getting started](#getting-started)
 - [Testing](#testing)
 - [Known simplifications & roadmap](#known-simplifications--roadmap)
+- [Further reading](#further-reading)
 - [Credits](#credits)
 
 ---
@@ -36,7 +37,7 @@ The board, rugs, and Assam are real photographed pieces; everything around them 
 - **Multi-scene app** — title screen, player setup, the game, an in-game pause menu, and a final standings screen.
 - **Custom players** — 2–4 merchants, each renamable (defaults: Peacock, Saffron, Crimson, Amethyst).
 - **Save & resume** — the match is snapshotted to `localStorage`, so a refresh or "Resume Game" picks up exactly where you left off.
-- **AI opponents** — any seat can be a computer player (random, greedy, or an expectiminimax search agent), plus an eval-only LLM agent and a `npm run eval` harness for measuring them. See [AI opponents & evaluation](#ai-opponents--evaluation).
+- **AI opponents** — any seat can be a computer player (random, greedy, or an expectiminimax search agent) or the server-backed **LLM opponent**, plus a `npm run eval` harness for measuring agents head-to-head. See [AI opponents & evaluation](#ai-opponents--evaluation).
 - **Animated feedback** — a tumbling 3D die that lands on the rolled face, Assam pacing the board cell by cell, and a rent popup that itemises every dirham and point that changes hands.
 - **Accessible overlays** — dialogs trap focus, close on `Escape`, restore focus on close, and all motion honours `prefers-reduced-motion`.
 - **Photographic board** — pieces positioned in fractions of the real board image, so the layout scales responsively.
@@ -215,45 +216,51 @@ Then in **Setup**, tap a seat until it reads **AI · LLM**. Full end-to-end arch
 ## Project structure
 
 ```
-src/
-├── App.tsx              # scene shell: home | setup | play
-├── game/                # ── pure engine (no React) ──
-│   ├── types.ts         #   GameState, Player, Rug, Coord, …
-│   ├── board.ts         #   board queries (adjacency, connected regions, counts)
-│   ├── rules.ts         #   the rules: rotate, move, place, pay, score, winner
-│   ├── moves.ts         #   legal-move enumeration + apply (shared by UI, AI, eval)
-│   ├── setup.ts         #   newGame(): a fresh, deterministic board
-│   ├── io.ts            #   serialize/parse (the assignment's game-string format)
-│   └── ai/              #   ── agents (pure, engine-only) ──
-│       ├── agent.ts     #     Agent / AsyncAgent contracts
-│       ├── agents.ts    #     random, greedy, expectiminimax search
-│       └── llm.ts       #     provider-agnostic LLM agent + validate-retry loop
-├── ui/                  # ── React components ──
-│   ├── BoardView.tsx    #   photographic board + positioned rug/Assam pieces
-│   ├── GameScreen.tsx   #   play scene — thin renderer over useTurnFlow
-│   ├── useTurnFlow.ts   #   the turn engine: state + roll/walk chain + AI auto-play + persistence
-│   ├── HomeScreen.tsx   #   title screen (New Game / Resume / How to Play)
-│   ├── SetupScreen.tsx  #   player count, custom names, per-seat human/AI choice
-│   ├── GameMenu.tsx     #   pause overlay
-│   ├── GameOver.tsx     #   final standings
-│   ├── RulesPanel.tsx   #   shared rules drawer
-│   ├── DiceRoll.tsx     #   tumbling 3D die overlay
-│   ├── PaymentPrompt.tsx#   rent / bankruptcy popup
-│   ├── Controls.tsx     #   turn controls ("Merchant's Ledger")
-│   ├── ScorePanel.tsx   #   per-player dirhams / rugs / score
-│   ├── useDialog.ts     #   overlay a11y: focus trap, Escape, focus restore
-│   ├── persistence.ts   #   save/resume via localStorage
-│   ├── players.ts       #   palette, default names, GameConfig, seat kinds
-│   ├── game.css         #   design tokens + in-game chrome
-│   └── scenes.css       #   scenes + overlays + reduced-motion
-└── main.tsx             # React entry point
+packages/engine/          # @marrakech/engine — pure game core (no React, no DOM)
+└── src/
+    ├── index.ts           #   barrel: the package's public API
+    └── game/
+        ├── types.ts       #   GameState, Player, Rug, Coord, …
+        ├── board.ts       #   board queries (adjacency, connected regions, counts)
+        ├── rules.ts       #   the rules: rotate, move, place, pay, score, winner
+        ├── moves.ts       #   legal-move enumeration + apply (shared by UI, AI, eval)
+        ├── setup.ts       #   newGame(): a fresh, deterministic board
+        └── ai/            #   ── agents (pure) ──
+            ├── agent.ts   #     Agent / AsyncAgent contracts
+            ├── agents.ts  #     random, greedy, expectiminimax search
+            └── llm.ts     #     provider-agnostic LLM agent + validate-retry loop
 
-eval/                    # AI eval harness (Node, run with tsx — outside the app build)
-├── arena.ts             #   play seeded games between agents; aggregate metrics
-├── anthropic.ts         #   Anthropic-backed `complete` adapter for the LLM agent
-└── run.ts               #   CLI entry — `npm run eval`
+apps/api/                 # @marrakech/api — Hono server (LLM proxy + persistence)
+└── src/
+    ├── app.ts             #   createApp({complete, store}): routes, zod, CORS, rate limit
+    ├── server.ts          #   entry: wires the Anthropic adapter + SQLite store
+    ├── anthropic.ts       #   Anthropic-backed Complete adapter (key server-side only)
+    ├── store.ts           #   GameStore: node:sqlite + in-memory impls
+    └── rateLimit.ts       #   in-memory per-IP limiter
 
-tests/                   # Vitest specs: rules, moves, setup, io, agents, llm, and UI interaction
+src/                      # the web app (Vite + React), depends on @marrakech/engine
+├── App.tsx               #   scene shell: home | setup | play
+├── ui/
+│   ├── BoardView.tsx      #   photographic board + positioned rug/Assam pieces
+│   ├── GameScreen.tsx     #   play scene — thin renderer over useTurnFlow
+│   ├── useTurnFlow.ts     #   turn engine: state + roll/walk + AI auto-play + persistence
+│   ├── aiClient.ts        #   calls /api/ai-move for the LLM seat
+│   ├── HomeScreen · SetupScreen · GameMenu · GameOver · RulesPanel
+│   ├── DiceRoll · PaymentPrompt · Controls · ScorePanel
+│   ├── useDialog.ts       #   overlay a11y: focus trap, Escape, focus restore
+│   ├── persistence.ts     #   save/resume via localStorage
+│   ├── players.ts         #   palette, names, GameConfig, seat kinds
+│   └── game.css · scenes.css
+└── main.tsx
+
+eval/                     # AI eval harness (Node, run with tsx — outside the app build)
+├── arena.ts              #   play seeded games between agents; aggregate metrics
+├── anthropic.ts          #   Anthropic-backed `complete` adapter for the LLM agent
+└── run.ts                #   CLI entry — `npm run eval`
+
+tests/                    # Vitest: rules, moves, setup, agents, llm, assignment-data,
+                          #   UI interaction; helpers/gameString.ts (test-only format)
+docs/                     # AI.md · DEPLOY.md · ERD.md · TESTING.md
 ```
 
 ---
@@ -292,7 +299,7 @@ npm run eval       # play AI agents against each other (see AI section)
 
 Tests run on **Vitest** and split into two layers:
 
-- **Engine (Node).** Pure-rule specs plus fixture-driven tests that replay the original assignment's game-string scenarios (`tests/fixtures/*.txt`) for movement, placement validity, payment, win detection, and serialization round-trips. Because the rules are pure functions, they need no DOM.
+- **Engine (Node).** Pure-rule specs plus fixture-driven tests that replay the original assignment's game-string scenarios (`tests/fixtures/*.txt`) for movement, placement validity, payment, and win detection — 100+ cases proving the TS port matches the Java semantics. Because the rules are pure functions, they need no DOM.
 - **UI (jsdom).** Interaction tests with React Testing Library cover scene navigation, the timer-driven turn flow (rotate → roll → walk → place), save/resume persistence, and overlay accessibility (Escape-to-close).
 
 ```bash
@@ -306,10 +313,20 @@ npm run test:watch  # watch mode
 
 This is a faithful adaptation with a couple of deliberate gaps, and room to grow:
 
-- **Local play** — humans and AI agents share one device. No online/networked multiplayer yet; an authoritative server reusing the same rule functions for validation would be the natural next step.
-- **Search depth** — the expectiminimax agent looks two plies ahead with no pruning, so it's deliberately shallow for responsiveness. Alpha-beta / move ordering would let it search deeper.
-- **Lossy assignment format** — `game/io.ts` (the Java game-string format) is kept for its tests but isn't used for save/resume, since it drops turn order, phase, and names. Live saves use a full JSON snapshot instead.
-- **Asset size** — `board.png` is ~900 KB; converting it to WebP would roughly halve initial load (skipped here only because no WebP encoder was available locally).
+- **Local play** — humans and AI agents share one device. No online/networked multiplayer yet; the API server already validates moves with the shared engine, so an authoritative WebSocket game host is the natural next step (see [`docs/DEPLOY.md`](docs/DEPLOY.md)).
+- **Search depth** — the expectiminimax agent looks two plies ahead with no pruning: deliberately shallow for a responsive browser (depth 3 is measurably unusable — minutes per game). Plain alpha-beta doesn't apply above chance nodes; the correct deeper-search optimisation is **\*-minimax (star1/star2) pruning**, noted in [`docs/AI.md`](docs/AI.md).
+- **Deployment** — everything runs locally (web + API + eval); it isn't yet deployed to a public URL. [`docs/DEPLOY.md`](docs/DEPLOY.md) has the Vercel + Fly.io plan.
+
+---
+
+## Further reading
+
+In-depth docs live in [`docs/`](docs/):
+
+- [**AI.md**](docs/AI.md) — how the agents and eval harness work, end to end: move enumeration, the expectiminimax tree, the LLM validate-retry loop, and the debugging story behind the search agent.
+- [**TESTING.md**](docs/TESTING.md) — the test strategy: the pure-core / interaction / API layers, what each guards, and how to run and extend them.
+- [**ERD.md**](docs/ERD.md) — the data model: the `GameState` domain entities and the persistence schema, with an entity-relationship diagram.
+- [**DEPLOY.md**](docs/DEPLOY.md) — the plan to deploy the web app + API (Vercel + Fly.io) and reach frontend / backend / fullstack / agentic in production.
 
 ---
 

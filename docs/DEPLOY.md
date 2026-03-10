@@ -1,25 +1,27 @@
 # Deploy plan — frontend · backend · fullstack · AI agentic
 
-How to take Marrakech from "a great front-end with an eval-only AI" to a
-deployed full-stack app where the LLM opponent is playable in the browser —
-covering all four CV pillars with one coherent backend.
+The path to a **deployed** full-stack Marrakech, covering all four CV pillars.
+The backend and the browser LLM opponent are **already built** (Phases 1–2 below,
+now shipped); what remains is putting them on a public URL (Phase 3+).
 
 ---
 
 ## Where the project stands
 
-| Pillar | Today | After this plan |
+| Pillar | Status | Evidence |
 |---|---|---|
-| **Frontend** | ✅ React 19, scenes, bespoke CSS, a11y | ✅ unchanged, + talks to an API |
-| **AI / agentic** | 🟡 agents + eval, but LLM is **eval-only (Node)** | ✅ LLM opponent **playable in production** |
-| **Backend** | ❌ none | ✅ Node API: AI-move + game persistence |
-| **Fullstack** | ❌ none | ✅ FE ↔ API ↔ DB, deployed |
+| **Frontend** | ✅ | React 19, scenes, bespoke CSS, a11y |
+| **AI / agentic** | ✅ | search + LLM agents; LLM **playable in-browser** via the API |
+| **Backend** | ✅ (local) | `@marrakech/api`: `/api/ai-move` + game persistence |
+| **Fullstack** | ✅ (local) | shared engine on both sides; server-authoritative validation |
+| **Deployed** | ⏳ | runs locally; not yet on a public URL — this doc |
 
-The insight: **one small backend creates all three missing pillars at once.** It
+The insight that drove it: **one small backend created three pillars at once.** It
 holds the API key (so the LLM is reachable from the browser), persists games to a
-DB (backend + fullstack), and gives you a deployed URL. The existing `Complete`
-seam in [`src/game/ai/llm.ts`](../src/game/ai/llm.ts) is already the exact
-abstraction needed: the server *is* a `Complete` implementation reached over HTTP.
+DB (backend + fullstack), and — once deployed — gives a public URL. The `Complete`
+seam in [`packages/engine/src/game/ai/llm.ts`](../packages/engine/src/game/ai/llm.ts)
+is the abstraction that made it clean: the server *is* a `Complete` implementation
+reached over HTTP.
 
 **Decisions locked:** standalone Node API · split hosting (Vercel front-end +
 Fly.io/Railway back-end).
@@ -48,9 +50,9 @@ is legal just because the client says so.
 
 ---
 
-## Phase 0 — Repo shape (monorepo-lite)
+## Phase 0 — Repo shape (monorepo-lite) — ✅ done
 
-Keep one repo; split into workspaces so the shared engine has one home.
+The engine is a workspace package; the web app and API import it.
 
 ```
 marrakech/
@@ -69,9 +71,9 @@ marrakech/
 
 ---
 
-## Phase 1 — The backend API (`apps/api`)
+## Phase 1 — The backend API (`apps/api`) — ✅ done
 
-**Stack:** [Hono](https://hono.dev) on Node (tiny, typed, runs identically on Node/Fly/serverless), `@anthropic-ai/sdk` (already a dep), Postgres via `pg` or Drizzle ORM.
+**Stack:** [Hono](https://hono.dev) on Node (tiny, typed, runs identically on Node/Fly/serverless), `@anthropic-ai/sdk` (already a dep). Persistence uses `node:sqlite` behind a `GameStore` interface today; Postgres (via `pg` or Drizzle) slots in for production.
 
 ### Endpoints
 
@@ -112,19 +114,18 @@ get a working save/load with one table.
 
 ---
 
-## Phase 2 — Frontend wiring (`apps/web`)
+## Phase 2 — Frontend wiring — ✅ done
 
-The browser stays mostly as-is; the only new idea is **which `Complete` to use**:
+The browser stays mostly as-is; the new idea is **which `Complete` to use**:
 
-- **Algorithmic agents** (`random`/`greedy`/`search`) keep running **locally** — they're pure and fast, no round-trip needed. This is a nice talking point: not everything needs the server.
-- **LLM agent** gets a browser `Complete` that POSTs to `/api/ai-move`. Add `'llm'` to `SeatKind`, and the Setup toggle gains an **AI · LLM** option.
-- **Save/resume** optionally writes through to `/api/games` in addition to `localStorage`, enabling cross-device resume and shareable game links.
+- **Algorithmic agents** (`random`/`greedy`/`search`) run **locally** — pure and fast, no round-trip. Not everything needs the server.
+- **LLM agent** uses a browser client (`aiClient.ts`) that POSTs to `/api/ai-move`. `'llm'` is a `SeatKind` and the Setup toggle offers **AI · LLM**. `useTurnFlow` awaits the fetch with a cancel-guard and a local greedy fallback if the API is unreachable.
+- **Save/resume** could additionally write through to `/api/games` (beyond `localStorage`) for cross-device resume and shareable links — not yet wired.
 
-Use a `VITE_API_URL` env var so dev points at `localhost` and prod at the Fly/Railway URL.
+A `VITE_API_URL` env var points dev at `localhost` and prod at the Fly/Railway URL.
 
-> Security note already handled by design: because the key lives only on the
-> server, the in-browser LLM opponent is safe — exactly the gap the current
-> "eval-only" LLM agent leaves open.
+> Security note, handled by design: the key lives only on the server, so the
+> in-browser LLM opponent never exposes it.
 
 ---
 
@@ -139,7 +140,7 @@ Use a `VITE_API_URL` env var so dev points at `localhost` and prod at the Fly/Ra
 
 ### Frontend → Vercel
 
-1. Import the repo; set **root** to `apps/web`, build `npm run build`, output `dist/`.
+1. Import the repo; keep the **root** at the repo root (the Vite app lives there — `src/` + `index.html`), build `npm run build`, output `dist/`.
 2. Env: `VITE_API_URL=https://<your-api>.fly.dev`.
 3. Auto-deploys on push to `main`.
 

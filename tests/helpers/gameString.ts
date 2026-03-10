@@ -1,16 +1,14 @@
-// Save/load: the game-string format from the Java assignment.
-// State is the source of truth; this is just an import/export format (REWRITE.md §7).
+// The Java COMP1110 game-string format — a lossy import/export used ONLY by the
+// assignment-parity regression suite (tests/assignment-data.test.ts). It is not
+// part of the shipped engine: it drops turnIndex/phase and can't recover a fully
+// covered rug, so live save/resume uses a full JSON snapshot instead. Kept here,
+// test-only, so those 100+ fixtures still guard the pure rules against drift.
 //
 // Layout (concatenated, no separators):
 //   player : P + colour(1) + dirhams(3) + rugs(2) + status(1: i=in, o=out)
 //   assam  : A + col(1) + row(1) + facing(1)
 //   board  : B + 49 tiles x 3 chars, col-major; "n00" = empty, else colour + id(2)
-//
-// Note: the string only snapshots players, Assam and the board. It does NOT carry
-// turnIndex/phase (Java never did), and a covered rug square is invisible — so a
-// rug's two squares can only be recovered if both are still showing.
-import { BOARD_SIZE } from './types';
-import type { Cell, Colour, Facing, GameState, Player, Rug } from './types';
+import { BOARD_SIZE, type Cell, type Colour, type Facing, type GameState, type Player, type Rug } from '@marrakech/engine';
 
 const pad = (n: number, width: number) => String(n).padStart(width, '0');
 
@@ -92,7 +90,7 @@ function rebuildRugs(board: Cell[][]): Rug[] {
   return [...groups.values()].map((g) => ({
     colour: g.colour,
     id: g.id,
-    squares: (g.squares.length >= 2 ? [g.squares[0], g.squares[1]] : [g.squares[0], g.squares[0]]),
+    squares: (g.squares.length >= 2 ? [g.squares[0], g.squares[1]] : [g.squares[0], g.squares[0]]) as Rug['squares'],
   }));
 }
 
