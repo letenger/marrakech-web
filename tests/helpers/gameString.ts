@@ -4,6 +4,16 @@
 // covered rug, so live save/resume uses a full JSON snapshot instead. Kept here,
 // test-only, so those 100+ fixtures still guard the pure rules against drift.
 //
+// PLACEHOLDER CONTRACT — the format encodes only board + players + assam. It does
+// NOT encode turn order or phase, so parse() fills them with fixed placeholders:
+//     turnIndex: 0,  phase: 'rotate'
+// This is safe *because* every function these fixtures exercise (getPaymentAmount,
+// isPlacementValid, isRugValid, makePlacement, isGameOver, getWinner) reads only
+// board/players/assam and ignores turnIndex/phase. DO NOT assert on those two
+// fields against a parsed fixture, and DO NOT add a fixture whose expected output
+// depends on them — the placeholders would make it silently wrong. (A canary test
+// in assignment-data.test.ts pins this contract.)
+//
 // Layout (concatenated, no separators):
 //   player : P + colour(1) + dirhams(3) + rugs(2) + status(1: i=in, o=out)
 //   assam  : A + col(1) + row(1) + facing(1)

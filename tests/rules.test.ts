@@ -72,34 +72,55 @@ describe('rotateAssam', () => {
   });
 });
 
+// The movement fixtures are huge (~15k homogeneous rows), so rather than one
+// it.each per row (which would swamp the reporter) we run the loop but COLLECT
+// every mismatch and assert the list is empty — so a failure reports "N of M
+// failed" with the offending cases, instead of dying on the first one.
+function reportMismatches(label: string, mismatches: string[]) {
+  if (mismatches.length > 0) {
+    const shown = mismatches.slice(0, 10).join('\n  ');
+    throw new Error(
+      `${label}: ${mismatches.length} mismatch(es):\n  ${shown}` +
+        (mismatches.length > 10 ? `\n  …and ${mismatches.length - 10} more` : ''),
+    );
+  }
+}
+
 describe('moveAssam — simple (no edge) against real test data', () => {
   it('matches every simple case', () => {
+    const bad: string[] = [];
     for (const c of loadCases('assam_movement_simple.txt')) {
       const got = formatAssam(assamAfterMove(parseAssam(c.assam), c.die));
-      expect(got, `${c.assam} +${c.die}`).toBe(c.expected);
+      if (got !== c.expected) bad.push(`${c.assam} +${c.die} → got ${got}, want ${c.expected}`);
     }
+    reportMismatches('assam_movement_simple', bad);
   });
 });
 
 describe('moveAssam — complex (edge wrap) against real test data', () => {
   it('matches every edge/corner case', () => {
+    const bad: string[] = [];
     for (const c of loadCases('assam_movement_complex.txt')) {
       const got = formatAssam(assamAfterMove(parseAssam(c.assam), c.die));
-      expect(got, `${c.assam} +${c.die}`).toBe(c.expected);
+      if (got !== c.expected) bad.push(`${c.assam} +${c.die} → got ${got}, want ${c.expected}`);
     }
+    reportMismatches('assam_movement_complex', bad);
   });
 });
 
 describe('assamPath — cell-by-cell walk lands where a single move does', () => {
   it('final step equals assamAfterMove for every fixture case', () => {
+    const bad: string[] = [];
     for (const file of ['assam_movement_simple.txt', 'assam_movement_complex.txt']) {
       for (const c of loadCases(file)) {
         const start = parseAssam(c.assam);
         const path = assamPath(start, c.die);
-        expect(path, `${c.assam} +${c.die} step count`).toHaveLength(c.die);
-        expect(formatAssam(path[path.length - 1]), `${c.assam} +${c.die}`).toBe(c.expected);
+        if (path.length !== c.die) bad.push(`${c.assam} +${c.die} → ${path.length} steps, want ${c.die}`);
+        const end = formatAssam(path[path.length - 1]);
+        if (end !== c.expected) bad.push(`${c.assam} +${c.die} → walk ended ${end}, want ${c.expected}`);
       }
     }
+    reportMismatches('assamPath', bad);
   });
 });
 
