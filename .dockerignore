@@ -1,0 +1,19 @@
+# Docker reads the .dockerignore at the BUILD CONTEXT ROOT (the repo root, since
+# the API is deployed with `fly deploy --dockerfile apps/api/Dockerfile` run from
+# here). The apps/api/.dockerignore is NOT used for that build — this file is.
+#
+# Keep local-only and heavy paths out of the image: node_modules is reinstalled
+# via `npm ci`, and secrets / local databases must never be baked into a layer.
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+**/*.db
+**/*.db-journal
+**/*.db-wal
+.git
+**/*.log
+**/.DS_Store
+.claude
+docs
