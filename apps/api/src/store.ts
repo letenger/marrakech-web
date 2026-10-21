@@ -1,9 +1,4 @@
-// Persistence for saved games, behind a small interface so the storage engine
-// is swappable. Two implementations ship here:
-//   • SqliteStore  — node:sqlite (built-in, zero-dep); the default for dev/prod.
-//   • MemoryStore  — an in-process Map; used by the route tests.
-// In production this interface is where a Postgres implementation would slot in
-// (see docs/DEPLOY.md) without touching any route code.
+// Saved-game persistence with SQLite and in-memory implementations.
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import type { GameConfig, GameState } from './types';
@@ -21,12 +16,9 @@ export interface GameStore {
   get(id: string): SavedGame | null;
 }
 
-// --- SQLite (default) ----------------------------------------------------
-
 export class SqliteStore implements GameStore {
   private db: DatabaseSync;
 
-  // `path` defaults to an on-disk file; pass ':memory:' for an ephemeral DB.
   constructor(path = 'marrakech.db') {
     this.db = new DatabaseSync(path);
     this.db.exec(`
@@ -70,8 +62,6 @@ export class SqliteStore implements GameStore {
     };
   }
 }
-
-// --- in-memory (tests) ---------------------------------------------------
 
 export class MemoryStore implements GameStore {
   private games = new Map<string, SavedGame>();

@@ -1,10 +1,4 @@
-// A provider-agnostic LLM opponent. It implements the same AsyncAgent contract
-// as the algorithmic agents, but chooses moves by prompting a language model
-// and validating the reply against the legal move set — retrying with the error
-// fed back on malformed or illegal output, and falling back to the greedy agent
-// if the model can't produce a legal move within the retry budget.
-//
-// Eval-only: never bundled into the browser, so no API key reaches the client.
+// Provider-agnostic LLM agent with legal-move validation and greedy fallback.
 import type { AsyncAgent } from './agent';
 import { greedyAgent } from './agents';
 import {
@@ -17,23 +11,19 @@ import { colourAt } from '../board';
 import { BOARD_SIZE } from '../types';
 import type { GameState } from '../types';
 
-// The single seam to a model: take a prompt, return its text completion.
 export type Complete = (prompt: string) => Promise<string>;
 
-// One malformed/illegal attempt, surfaced so the eval harness can count them.
 export type IllegalMove = { phase: 'rotate' | 'place'; reason: string; raw: string };
 
 export type LlmOptions = {
   complete: Complete;
   name?: string;
-  maxRetries?: number; // tries to get a legal move before falling back (default 2)
+  maxRetries?: number;
   onIllegalMove?: (info: IllegalMove) => void;
 };
 
 const ARROW: Record<string, string> = { N: '↑', E: '→', S: '↓', W: '←' };
 
-// Render the board as text, rows top to bottom. Empty squares are '.', rugs are
-// the owner's colour letter, and Assam is shown as '@' with his facing.
 function boardToText(state: GameState): string {
   const lines: string[] = [];
   for (let row = 0; row < BOARD_SIZE; row++) {
@@ -68,12 +58,9 @@ const RULES_BRIEF = [
   'Letters c/y/r/p are the four player colours.',
 ].join(' ');
 
-// Pull the first balanced {...} JSON object out of a model reply (which may wrap
-// it in prose or ``` fences). Returns null if none parses.
 function extractJson(text: string): Record<string, unknown> | null {
   const start = text.indexOf('{');
   if (start === -1) return null;
-  // Walk braces to find the matching close, tolerating nested objects.
   let depth = 0;
   for (let i = start; i < text.length; i++) {
     if (text[i] === '{') depth++;
@@ -122,7 +109,6 @@ export function llmAgent(opts: LlmOptions): AsyncAgent {
       onIllegalMove?.({ phase: 'rotate', reason: 'not a legal rotation', raw });
       prompt = `${base}\n\nYour previous reply was invalid (${JSON.stringify(raw).slice(0, 120)}). Reply with ONLY {"rotation": <0|90|270>}.`;
     }
-    // Budget exhausted — fall back to a sound algorithmic choice.
     return greedyAgent.chooseRotation(state, Math.random);
   }
 
@@ -166,5 +152,4 @@ export function llmAgent(opts: LlmOptions): AsyncAgent {
   return { name, chooseRotation, choosePlacement };
 }
 
-// A degenerate "model" handy for offline tests: always replies with this text.
 export const fakeComplete = (reply: string): Complete => () => Promise.resolve(reply);

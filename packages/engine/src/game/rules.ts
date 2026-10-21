@@ -41,7 +41,7 @@ export function rotateAssam(state: GameState, degrees: 0 | 90 | 180 | 270): Game
 }
 
 // ---------------------------------------------------------------------------
-// Movement (the edge-wrap, rewritten cleanly — see REWRITE.md problem #5)
+// Movement with the board's edge-wrap path.
 // ---------------------------------------------------------------------------
 
 // When Assam walks off an edge he folds back onto the board along the painted

@@ -1,9 +1,3 @@
-// The turn engine for the play scene, as a hook: it owns the in-game state
-// (rotate → roll → walk → settle → place) and the roll/walk/rent overlays,
-// and quietly persists the match to localStorage so it can be resumed.
-//
-// Lifting this out of GameScreen keeps the component a thin renderer and makes
-// the flow unit-testable on its own.
 import { useEffect, useState } from 'react';
 import type { Overlay } from './BoardView';
 import type { PaymentResult } from './PaymentPrompt';
@@ -79,7 +73,7 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
   const busy = rolling !== null || walking || prompt !== null;
   const gameOver = ui.winner !== null;
 
-  // Persist at every stable point (not mid-walk, where Assam is between cells).
+  // Avoid persisting Assam between cells during the walk animation.
   useEffect(() => {
     if (gameOver) {
       clearSave();
@@ -92,21 +86,13 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
   const isAITurn = !gameOver && currentSeat !== 'human';
   const isLlmTurn = isAITurn && currentSeat === 'llm';
 
-  // Drive AI seats: when an agent controls the active seat, step it through the
-  // same rotate → roll → (acknowledge rent) → place actions a human would click,
-  // paced so a watcher can follow. Local agents (random/greedy/search) decide
-  // synchronously; the 'llm' seat asks the API, so its rotate/place branches
-  // await a fetch, guard against a stale apply (state changed / unmounted), and
-  // fall back to a local greedy move if the server is unreachable — the game
-  // never hangs on a bad network. Animations own the screen; we stand back.
+  // AI seats use the same turn handlers and animation flow as human players.
   useEffect(() => {
     if (!isAITurn || rolling !== null || walking) return;
 
     let cancelled = false;
     let timer: number;
 
-    // Acknowledging the rent popup and rolling the die are identical for every
-    // AI seat, LLM included.
     if (prompt !== null) {
       timer = window.setTimeout(() => prompt.onContinue(), AI_PROMPT_MS);
       return () => window.clearTimeout(timer);
@@ -117,7 +103,6 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     }
 
     if (isLlmTurn) {
-      // Async: fetch the move, then apply only if still this exact turn.
       if (state.phase === 'rotate') {
         timer = window.setTimeout(() => {
           void fetchAiRotation(state)
@@ -140,7 +125,6 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
       return () => { cancelled = true; window.clearTimeout(timer); };
     }
 
-    // Local synchronous agents.
     const agent = AGENTS[currentSeat];
     if (!agent) return;
     if (state.phase === 'rotate') {
@@ -155,8 +139,6 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
       return;
     }
     return () => window.clearTimeout(timer);
-    // The handlers below close over the same `state`/`ui` this effect depends on,
-    // so they re-create in lockstep with it; listing the reactive values is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, rolling, walking, prompt, isAITurn, isLlmTurn, currentSeat]);
 
@@ -175,14 +157,12 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     setUi({ ...ui, state: { ...rotated, phase: 'move' }, message: `${nameOf(state)} — roll the die.` });
   }
 
-  // Step 1 — roll: pick the die, then tumble it on screen.
   function onRoll() {
     if (state.phase !== 'move' || ui.winner || busy) return;
     const die = rollDie(Math.random);
     setRolling({ value: die, commit: () => startWalk(die) });
   }
 
-  // Step 2 — walk: pace Assam one cell at a time along his path.
   function startWalk(die: 1 | 2 | 3 | 4) {
     setRolling(null);
     setWalking(true);
@@ -199,7 +179,6 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     stepOnce();
   }
 
-  // Step 3 — settle: work out the rent and, if any changes hands, show the prompt.
   function settleLanding(die: 1 | 2 | 3 | 4) {
     setWalking(false);
     const moved = moveAssam(state, die);
@@ -227,7 +206,6 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     setPrompt({ result, onContinue: () => proceed(die, pay) });
   }
 
-  // Step 4 — proceed: dismiss the prompt and move into placement (or end turn).
   function proceed(die: 1 | 2 | 3 | 4, pay: ReturnType<typeof settlePayment>) {
     setPrompt(null);
     let msg = `Rolled ${die}. `;
@@ -252,7 +230,6 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     if (!ui.anchor) return;
     placeRug({ anchor: ui.anchor, second });
   }
-  // Lay a rug in one shot — used by the two-click human flow and by AI seats.
   function placeRug(p: Placement) {
     const placed = makePlacement(state, candidateRug(state, p.anchor, p.second));
     finishTurn(placed, `${nameOf(state)} placed a rug. `);
@@ -269,7 +246,6 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     setUi({ state, die: null, anchor: null, winner: null, message: openingMessage(state) });
   }
 
-  // Clickable overlay for the placement phase.
   let overlays: Overlay[] = [];
   if (state.phase === 'place' && !ui.winner) {
     if (ui.anchor === null) {

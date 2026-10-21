@@ -86,7 +86,7 @@ Saved games live behind a small `GameStore` interface
 swappable. Two implementations ship: `SqliteStore` (`node:sqlite`, the default)
 and `MemoryStore` (an in-process `Map`, used by the route tests). Production
 would add a Postgres implementation behind the same interface without touching
-any route code (see [`DEPLOY.md`](DEPLOY.md)).
+any route code.
 
 ### The `games` table
 

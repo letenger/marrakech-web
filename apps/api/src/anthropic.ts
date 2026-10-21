@@ -1,7 +1,3 @@
-// Anthropic-backed implementation of the engine's `Complete` seam. The key is
-// read from the environment and stays on the server — it is never sent to the
-// browser. (A near-identical adapter exists in eval/; the engine must stay pure,
-// so the adapter can't live there and this small duplication is deliberate.)
 import Anthropic from '@anthropic-ai/sdk';
 import type { Complete } from '@marrakech/engine';
 

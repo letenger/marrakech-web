@@ -1,5 +1,4 @@
-// Algorithmic agents, weakest to strongest. All are pure: given the same state
-// and a seeded rng they make the same choice, so the eval harness reproduces.
+// Pure agents remain reproducible when the caller supplies a seeded RNG.
 import type { Agent } from './agent';
 import { pick } from './agent';
 import { DIE_DISTRIBUTION, scoreOf, moveAssam, settlePayment } from '../rules';
@@ -11,11 +10,6 @@ import {
 } from '../moves';
 import type { GameState, Player } from '../types';
 
-// --- shared evaluation ---------------------------------------------------
-
-// How good `state` looks for the player whose colour is `me`: my score minus
-// the strongest opponent's. Positive means I'm ahead. Out players score -inf
-// from their own seat so the agent avoids bankrupting itself.
 function heuristic(state: GameState, me: Player['colour']): number {
   const mine = state.players.find((p) => p.colour === me)!;
   if (mine.out) return -Infinity;
@@ -28,8 +22,6 @@ function heuristic(state: GameState, me: Player['colour']): number {
   return myScore - (bestOpp === -Infinity ? 0 : bestOpp);
 }
 
-// --- random --------------------------------------------------------------
-
 export const randomAgent: Agent = {
   name: 'random',
   chooseRotation: (_state, rng) => pick(legalRotations(), rng),
@@ -39,11 +31,6 @@ export const randomAgent: Agent = {
   },
 };
 
-// --- greedy --------------------------------------------------------------
-// Looks one ply ahead with no opponent model: for rotation, averages the
-// heuristic over the die distribution; for placement, picks the best immediate
-// board. Fast and surprisingly competent.
-
 export const greedyAgent: Agent = {
   name: 'greedy',
   chooseRotation: (state, _rng) => {
@@ -52,7 +39,6 @@ export const greedyAgent: Agent = {
     let bestVal = -Infinity;
     for (const deg of legalRotations()) {
       const rotated = applyRotation(state, deg);
-      // Expected value over the die, settling rent at each landing.
       let ev = 0;
       for (const { value, p } of DIE_DISTRIBUTION) {
         const landed = settlePayment(moveAssam(rotated, value)).state;
@@ -82,29 +68,14 @@ export const greedyAgent: Agent = {
   },
 };
 
-// --- expectiminimax ------------------------------------------------------
-// Depth-limited search where the die is a chance node weighted by the real
-// 1/2/2/3/3/4 distribution. The mover maximises the heuristic; we model the
-// turn structure (rotate → chance → place) and look DEPTH plies ahead.
-//
-// No pruning: the branching factor is rotations (3) × die faces (4) × placements
-// (up to ~a dozen) per ply, so cost is ~(3·4·12)^DEPTH. Depth 2 decides in
-// hundreds of ms (fine for the browser); depth 3 blows past minutes per game
-// and is unusable — measured with `npm run eval`. Plain alpha-beta does NOT
-// apply here (the max/min nodes sit above chance nodes, whose partial
-// expectation can't be bounded mid-sum); the correct deeper-search optimisation
-// is *-minimax (star1/star2) pruning, noted as future work in docs/AI.md.
-const DEPTH = 2; // plies of (rotate+place) lookahead; kept small for speed
+// Depth two keeps expectiminimax responsive in the browser. Chance nodes use
+// the real die distribution; player decisions alternate max/min perspective.
+const DEPTH = 2;
 
-// Value of the position once Assam has landed and it is time to place a rug.
-// The mover at this node maximises my advantage if it's my turn, and minimises
-// it if it's an opponent's (they play for themselves) — proper minimax, not the
-// optimistic max-everywhere that makes deeper search play worse.
 function searchPlacementValue(state: GameState, me: Player['colour'], depth: number): number {
   const maximizing = state.players[state.turnIndex].colour === me;
   const moves = legalPlacements(state);
   if (!moves.length) {
-    // No legal placement: the turn passes. Evaluate the advanced state.
     const passed = applyPlacement(state, { anchor: state.assam.pos, second: state.assam.pos });
     return depth <= 0 ? heuristic(passed, me) : rotateValue(passed, me, depth - 1);
   }
@@ -117,9 +88,6 @@ function searchPlacementValue(state: GameState, me: Player['colour'], depth: num
   return best;
 }
 
-// Value of being at a 'rotate' decision: the mover optimises over rotations
-// (max for me, min for an opponent), then we take the die expectation, then the
-// best placement. The chance node always averages, whoever is moving.
 function rotateValue(state: GameState, me: Player['colour'], depth: number): number {
   if (state.phase === 'gameover') return heuristic(state, me);
   const maximizing = state.players[state.turnIndex].colour === me;

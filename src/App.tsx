@@ -1,5 +1,3 @@
-// The scene shell. App owns which screen is showing, the chosen player config,
-// and any resumable save; each scene component holds its own logic.
 import { useState } from 'react';
 import { HomeScreen } from './ui/HomeScreen';
 import { SetupScreen } from './ui/SetupScreen';
@@ -31,8 +29,6 @@ export default function App() {
     setScene('play');
   }
 
-  // Returning to the title: re-read the save so Home reflects current progress
-  // (or its absence, once a finished game has cleared it).
   function toHome() {
     setSave(loadSave());
     setScene('home');

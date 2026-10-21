@@ -1,16 +1,3 @@
-// The Marrakech API, as a factory so tests can inject a fake `complete` and an
-// in-memory store (no key, no disk). server.ts wires the real adapters.
-//
-// Routes:
-//   GET  /api/health          — liveness
-//   POST /api/ai-move          — LLM chooses a legal rotation or placement
-//   POST /api/games            — persist a new game, returns { id }
-//   GET  /api/games/:id        — load a saved game
-//   PUT  /api/games/:id        — update a saved game's state
-//
-// Security posture: the LLM key lives only here; the server re-derives legal
-// moves from the posted state (never trusts the client for legality); bodies are
-// zod-validated; CORS is locked to the web origin; /api/ai-move is rate limited.
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
@@ -21,12 +8,11 @@ import { rateLimit } from './rateLimit';
 export type AppDeps = {
   complete: Complete;
   store: GameStore;
-  webOrigin?: string; // CORS allow-list; defaults to the Vite dev origin
+  webOrigin?: string;
 };
 
-// We validate the envelope but treat GameState structurally — the engine is the
-// real authority (it only ever returns moves legal for the posted state), so a
-// deep schema would just duplicate the rules. `passthrough` keeps unknown keys.
+// Validate the transport shape here; the shared engine remains the authority
+// for move legality.
 const gameStateSchema = z
   .object({
     players: z.array(z.unknown()).min(2).max(4),
@@ -59,7 +45,6 @@ export function createApp({ complete, store, webOrigin }: AppDeps) {
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 
-  // 30 AI moves / minute / IP — this route spends money, so it's throttled.
   const aiLimiter = rateLimit({ windowMs: 60_000, max: 30 });
 
   app.post('/api/ai-move', async (c) => {
@@ -75,9 +60,8 @@ export function createApp({ complete, store, webOrigin }: AppDeps) {
         return c.json({ rotation });
       }
       const placement = await agent.choosePlacement(state, Math.random);
-      return c.json({ placement }); // placement may be null → the turn passes
+      return c.json({ placement });
     } catch {
-      // Model/provider failure — signal it so the client falls back locally.
       return c.json({ error: 'ai unavailable' }, 502);
     }
   });
@@ -106,8 +90,6 @@ export function createApp({ complete, store, webOrigin }: AppDeps) {
   return app;
 }
 
-// Best-effort client identity for rate limiting: the proxy-forwarded IP, else a
-// fixed key (dev). Not a security control — just spend protection.
 function clientKey(c: { req: { header: (n: string) => string | undefined } }): string {
   return c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'local';
 }
