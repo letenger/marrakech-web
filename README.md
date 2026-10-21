@@ -19,8 +19,8 @@ A full-stack TypeScript adaptation of Dominique Ehrhard's board game *Marrakech*
 ## Project timeline
 
 - **February 2025:** Started the project and built the core rules, playable React interface, scenes, animation, save and resume, and accessibility support.
-- **March 2026:** Added algorithmic and LLM opponents, the seeded evaluation harness, shared engine workspace, API, persistence, and model-provider adapters.
-- **October 2026:** Prepared the public portfolio release, refreshed dependencies, verified the live deployment, and streamlined the technical documentation.
+- **March 2026:** Added algorithmic and LLM opponents, the seeded evaluation harness, shared engine workspace, API, persistence, and model-provider adapters. This marked the end of the project’s active development period.
+- **October 2026:** Performed portfolio maintenance only: refreshed dependencies, verified the existing deployment, and streamlined the public documentation.
 
 ## Architecture
 
