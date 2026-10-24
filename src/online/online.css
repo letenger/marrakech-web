@@ -48,7 +48,7 @@
   --online-side-width: 330px;
   box-sizing: border-box;
   height: 100dvh;
-  max-width: 1180px;
+  max-width: min(1180px, calc(100dvh + 244px));
   padding: 16px 24px;
   display: flex;
   flex-direction: column;
