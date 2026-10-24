@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
-import { newGame, transitionGame } from '@marrakech/engine';
+import { AGENTS, newGame, scoreOf, transitionGame } from '@marrakech/engine';
 import type { Colour, OnlineCommand, OnlineRoom, OnlineSnapshot } from '@marrakech/engine';
 import { MemoryOnlineStore } from './onlineStore';
 import type { OnlineStore } from './onlineStore';
@@ -55,6 +55,8 @@ const commandSchema = z.discriminatedUnion('type', [
     type: z.literal(type),
     guestId: z.string()
   })),
+  z.object({ ...base, type: z.literal('addAi'), kind: z.enum(['random', 'greedy', 'search']) }),
+  z.object({ ...base, type: z.literal('setAi'), guestId: z.string(), kind: z.enum(['random', 'greedy', 'search']) }),
   z.object({
     ...base,
     type: z.literal('ready'),
@@ -89,7 +91,13 @@ const commandSchema = z.discriminatedUnion('type', [
   })),
 ]);
 const hash = (token: string) => createHash('sha256').update(token).digest('hex');
-export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng = () => randomInt(0, 2 ** 32) / 2 ** 32, now = Date.now) {
+export type OnlineScheduler = (callback: () => void, delay: number) => () => void;
+const defaultScheduler: OnlineScheduler = (callback, delay) => {
+  const timer = setTimeout(callback, delay);
+  timer.unref?.();
+  return () => clearTimeout(timer);
+};
+export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng = () => randomInt(0, 2 ** 32) / 2 ** 32, now = Date.now, schedule: OnlineScheduler = defaultScheduler) {
   const app = new Hono<OnlineEnv>();
   const data: Data = JSON.parse(store.load() ?? '{"revision":0,"guests":[],"rooms":[]}');
   data.revision ??= 0;
@@ -105,6 +113,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
   });
   const save = () => store.save(JSON.stringify(data));
   const broadcast = () => {
+    reconcileAi();
     save();
     for (const listener of listeners)
       listener();
@@ -112,6 +121,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
   const roomOf = (id: string) => data.rooms.find(r => r.members.some(m => m.guestId === id));
   const observed = new Set<string>();
   const connected = (id: string) =>
+    id.startsWith('bot:') ||
     (connections.get(id) ?? 0) > 0 ||
     (observed.has(id) && now() - (data.guests.find(g => g.id === id)?.seen ?? 0) < 35_000);
 
@@ -121,14 +131,14 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
       room.requests = room.requests.filter(r => r.expiresAt > now());
       if (room.status !== 'playing' && !connected(room.hostId)) {
         const host = data.guests.find(g => g.id === room.hostId);
-        const next = room.members.find(m => connected(m.guestId));
+        const next = room.members.find(m => !m.ai && connected(m.guestId));
         if (next && now() - (host?.seen ?? 0) > 60000) {
           room.hostId = next.guestId;
           room.version++;
         }
       }
     }
-    data.rooms = data.rooms.filter(r => r.members.some(m => connected(m.guestId)) || now() - r.updated < (r.status === 'waiting' ? 600000 : 30 * 86400000));
+    data.rooms = data.rooms.filter(r => r.members.some(m => !m.ai && connected(m.guestId)) || now() - r.updated < (r.status === 'waiting' ? 600000 : 30 * 86400000));
     data.guests = data.guests.filter(g => now() - g.seen < 30 * 86400000 || data.rooms.some(r => r.members.some(m => m.guestId === g.id) || r.requests.some(q => q.guestId === g.id)));
   }
 
@@ -157,7 +167,8 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
         matchId: room.matchId,
         abandoned: room.abandoned,
         lastRoll: room.lastRoll,
-        roster: room.roster
+        roster: room.roster,
+        payments: room.payments
       } : null,
       pendingRequest: pending ? {
         roomId: pending.id,
@@ -212,7 +223,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
     await next();
   });
   const getGuest = (c: Context<OnlineEnv>) => c.get('guest');
-  app.get('/snapshot', c => c.json(snapshot(getGuest(c))));
+  app.get('/snapshot', c => { reconcileAi(); return c.json(snapshot(getGuest(c))); });
   app.get('/events', c => {
     const guest = getGuest(c);
     if ((connections.get(guest.id) ?? 0) >= 3)
@@ -287,6 +298,59 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
     }
   });
 
+  // Bots act only on the server. Each version gets at most one delayed job.
+  const jobs = new Map<string, { version: number; cancel: () => void }>();
+  function applyAction(room: Room, action: import('@marrakech/engine').GameAction) {
+    const result = transitionGame(room.state!, action, rng);
+    room.state = result.state;
+    if (result.roll !== null) room.lastRoll = result.roll;
+    if (result.payment && room.matchId && result.roll !== null) {
+      const payer = result.state.players.find(p => p.colour === result.payment!.payer)!;
+      const owner = result.state.players.find(p => p.colour === result.payment!.owner)!;
+      room.payments = [...(room.payments ?? []), {
+        ...result.payment, id: randomUUID(), matchId: room.matchId, createdAt: now(), die: result.roll,
+        payerDirhams: payer.dirhams, ownerDirhams: owner.dirhams,
+        payerScore: scoreOf(result.state, payer), ownerScore: scoreOf(result.state, owner)
+      }].slice(-32);
+    }
+    if (room.state.phase === 'gameover') room.status = 'finished';
+  }
+  function reconcileAi() {
+    for (const [id, job] of jobs) {
+      const room = data.rooms.find(r => r.id === id);
+      if (!room || room.version !== job.version || !canAct(room)) {
+        job.cancel(); jobs.delete(id);
+      }
+    }
+    for (const room of data.rooms) {
+      if (!canAct(room) || jobs.has(room.id)) continue;
+      const version = room.version;
+      const matchId = room.matchId;
+      const delay = room.state!.phase === 'place' ? 3200 : 2600;
+      const cancel = schedule(() => {
+        jobs.delete(room.id);
+        const live = data.rooms.find(r => r.id === room.id);
+        if (!live || live.version !== version || live.matchId !== matchId || !canAct(live)) return;
+        const state = live.state!;
+        const bot = live.members.find(m => m.colour === state.players[state.turnIndex].colour)!;
+        const agent = AGENTS[bot.ai!];
+        const action: import('@marrakech/engine').GameAction = state.phase === 'rotate'
+          ? { type: 'rotate', rotation: agent.chooseRotation(state, rng) }
+          : state.phase === 'move' ? { type: 'roll' }
+          : { type: 'place', placement: agent.choosePlacement(state, rng)! };
+        applyAction(live, action);
+        live.version++;
+        live.updated = now();
+        broadcast();
+      }, delay);
+      jobs.set(room.id, { version, cancel });
+    }
+  }
+  function canAct(room: Room) {
+    return room.status === 'playing' && !!room.state && room.members.every(m => connected(m.guestId)) &&
+      !!room.members.find(m => m.colour === room.state!.players[room.state!.turnIndex].colour)?.ai;
+  }
+
   // All mutations are synchronous, so validation and capacity checks are serialized.
   function execute(guest: Guest, cmd: OnlineCommand) {
     const fail = (message: string): never => {
@@ -299,7 +363,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
     };
     const reset = (room: Room) => {
       room.members.forEach(m => {
-        m.ready = false;
+        m.ready = !!m.ai;
       });
     };
     if (cmd.type === 'create') {
@@ -372,10 +436,10 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
       }
       room.members = room.members.filter(m => m.guestId !== guest.id);
       reset(room);
-      if (!room.members.length)
+      if (!room.members.some(m => !m.ai))
         data.rooms = data.rooms.filter(r => r.id !== room.id);
       else if (room.hostId === guest.id)
-        room.hostId = room.members.find(m => connected(m.guestId))?.guestId ?? room.members[0].guestId;
+        room.hostId = room.members.find(m => !m.ai && connected(m.guestId))?.guestId ?? room.members.find(m => !m.ai)!.guestId;
     }
     else if (cmd.type === 'accept' || cmd.type === 'decline' || cmd.type === 'remove') {
       host();
@@ -404,6 +468,19 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
         room.requests = room.requests.filter(q => q.guestId !== cmd.guestId);
       }
     }
+    else if (cmd.type === 'addAi' || cmd.type === 'setAi') {
+      host();
+      waiting();
+      if (cmd.type === 'addAi') {
+        if (room.members.length >= room.capacity) fail('No seat is available.');
+        room.members.push({ guestId: `bot:${randomUUID()}`, name: `AI ${cmd.kind}`, ai: cmd.kind, colour: colours.find(colour => !room.members.some(m => m.colour === colour))!, ready: true, connected: true });
+      } else {
+        const bot = room.members.find(m => m.guestId === cmd.guestId && m.ai) ?? fail('AI seat not found.');
+        bot.ai = cmd.kind;
+        bot.name = `AI ${cmd.kind}`;
+      }
+      reset(room);
+    }
     else if (cmd.type === 'capacity') {
       host();
       waiting();
@@ -429,7 +506,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
       if (room.members.length < 2 || !room.members.every(m => m.ready && connected(m.guestId)))
         fail('Everyone must be connected and ready.');
       room.state = newGame(room.members.length, rng);
-      room.roster = room.members.map(({ guestId, name, colour }) => ({ guestId, name, colour }));
+      room.roster = room.members.map(({ guestId, name, colour, ai }) => ({ guestId, name, colour, ...(ai ? { ai } : {}) }));
       room.state.players = room.state.players.map((p, i) => ({
         ...p,
         colour: room.members[i].colour
@@ -439,6 +516,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
       room.requests = [];
       room.abandoned = false;
       room.lastRoll = null;
+      room.payments = [];
     }
     else if (cmd.type === 'rematch') {
       host();
@@ -449,6 +527,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
       room.matchId = null;
       room.roster = [];
       room.lastRoll = null;
+      room.payments = [];
       reset(room);
     }
     else {
@@ -460,12 +539,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
         fail('It is not your turn.');
       if (cmd.type !== 'rotate' && cmd.type !== 'roll' && cmd.type !== 'place')
         fail('Unknown action.');
-      const result = transitionGame(room.state!, cmd as import('@marrakech/engine').GameAction, rng);
-      room.state = result.state;
-      if (result.roll !== null)
-        room.lastRoll = result.roll;
-      if (room.state.phase === 'gameover')
-        room.status = 'finished';
+      applyAction(room, cmd as import('@marrakech/engine').GameAction);
     }
     room.version++;
     room.updated = now();

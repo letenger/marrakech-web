@@ -1,6 +1,13 @@
 import type { Colour, GameState } from './game/types';
 import type { Placement, RotateChoice } from './game/moves';
+export type OnlineAiKind = 'random' | 'greedy' | 'search';
+export type OnlinePayment = {
+  id: string; matchId: string; createdAt: number; die: number;
+  payer: Colour; owner: Colour; owed: number; paid: number; bankrupt: boolean;
+  payerDirhams: number; ownerDirhams: number; payerScore: number; ownerScore: number;
+};
 export type OnlineMember = {
+  ai?: OnlineAiKind;
   guestId: string;
   name: string;
   colour: Colour;
@@ -30,7 +37,8 @@ export type OnlineRoom = OnlineRoomSummary & {
   state: GameState | null;
   abandoned: boolean;
   lastRoll: number | null;
-  roster?: Pick<OnlineMember, 'guestId' | 'name' | 'colour'>[];
+  roster?: Pick<OnlineMember, 'guestId' | 'name' | 'colour' | 'ai'>[];
+  payments?: OnlinePayment[];
 };
 export type OnlineSnapshot = {
   revision: number;
@@ -59,6 +67,13 @@ export type OnlineCommand = {
 } | {
   type: 'accept' | 'decline' | 'remove';
   guestId: string;
+} | {
+  type: 'addAi';
+  kind: OnlineAiKind;
+} | {
+  type: 'setAi';
+  guestId: string;
+  kind: OnlineAiKind;
 } | {
   type: 'ready';
   ready: boolean;

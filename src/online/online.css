@@ -35,3 +35,6 @@
 .online-game { margin-top: 24px; }
 .online-die { text-align: center; font-weight: bold; }
 @media (max-width: 720px) { .online-shell { padding: 16px; } .online-lobby { grid-template-columns: 1fr; } .online-room-card { flex-direction: column; align-items: stretch; } .online-members { grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); } }
+.online-ai-seats { margin: 20px 0; padding-top: 18px; border-top: 1px solid var(--brass-line); }
+.online-ai-seats h3 { margin-bottom: 8px; }
+.online-ai-seats button { margin-top: 12px; }

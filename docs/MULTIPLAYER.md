@@ -1,6 +1,6 @@
 # Public lobby and online rooms
 
-Choose **Play online**, enter a guest display name, and create a room or request entry to an existing public room. Hosts approve requests; accepted players choose unique colours and mark themselves ready. A host can start with 2–4 connected, ready players, up to the room capacity. Copy the room invitation or enter its code to find it directly; invitations still require host approval.
+Choose **Play online**, enter a guest display name, and create a room or request entry to an existing public room. Hosts approve requests; accepted players choose unique colours and mark themselves ready. A host can start with 2–4 connected, ready seats, including AI opponents, up to the room capacity. Copy the room invitation or enter its code to find it directly; invitations still require host approval.
 
 ## Run locally
 
@@ -15,6 +15,8 @@ For testing two players on one computer, use separate browsers or browser profil
 - Capacity can be 2, 3, or 4 and cannot be reduced below the accepted roster. Capacity, colour, or roster changes reset readiness.
 - Pending requests reserve no seats, expire after two minutes, and can be cancelled or declined. Hosts cannot accept beyond capacity. Removed guests are blocked from requesting that room again with the same identity.
 - Joining, colour changes, and removals stop once a match starts.
+- Hosts can fill open seats with Random, Greedy, or Search AI and change their difficulty before starting. AI seats count toward capacity and are automatically ready. One human plus AI is supported; bots never become hosts, and a room closes when its last human leaves.
+- AI decisions, rolls, and placements run on the server, with pauses for shared animations. Bots stop while a human is disconnected and resume after everyone reconnects, including after a backend restart. No model API key is needed for these AI seats.
 - An explicitly departing host transfers the role to a connected remaining member, falling back to the earliest member. In a waiting room, a disconnected host transfers after 60 seconds when another connected member is available.
 - Disconnected players retain their match seats. Play pauses until everyone reconnects. Refreshing a room URL restores the room and guest identity; missed animations are skipped in favor of the latest snapshot.
 - Explicitly leaving an active match abandons it for everyone, without a winner. Remaining players can return to the waiting room through the host's rematch control.
@@ -28,6 +30,8 @@ HTTP commands mutate state; an authenticated, fetch-based Server-Sent Events str
 
 Clients animate accepted dice results and movement locally. Animation completion never commits game rules. A newer authoritative version cancels outdated presentation work. Rug anchor selection remains local until a complete placement is submitted.
 
+The server publishes rent events with the roll, payer, owner, owed/paid amounts, bankruptcy flag, and the resulting balances and scores. Each browser queues unseen rent dialogs after movement and dismisses them locally. Continue never settles money again or gates other clients. A local acknowledgement avoids reopening a read event after refresh; joining an existing match does not replay its historical dialogs. Rooms retain the latest 32 rent events, cleared at a new match.
+
 Online data uses its own store and is inaccessible through the existing local saved-game routes. Tokens are random bearer credentials; only their hashes are stored server-side. Host-only request lists are omitted from other players' snapshots.
 
 ### HTTP API
@@ -39,7 +43,7 @@ Online data uses its own store and is inaccessible through the existing local sa
 | GET | `/api/online/events` | Authenticated live `snapshot` events |
 | POST | `/api/online/command` | Typed commands with unique `id` and room `version` |
 
-Commands cover create, request, cancelRequest, accept, decline, remove, ready, colour, capacity, start, leave, rematch, rotate, roll, and place. See `packages/engine/src/online.ts` for payloads. Validation, permissions, capacity, turn ownership, and move legality are enforced server-side.
+Commands cover create, request, cancelRequest, accept, decline, remove, addAi, setAi, ready, colour, capacity, start, leave, rematch, rotate, roll, and place. See `packages/engine/src/online.ts` for payloads. Validation, permissions, capacity, turn ownership, and move legality are enforced server-side.
 
 ## Persistence and deployment
 

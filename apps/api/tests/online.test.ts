@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { legalPlacements } from '@marrakech/engine';
 import type { OnlineSnapshot } from '@marrakech/engine';
 import { onlineRoutes } from '../src/online';
+import type { OnlineScheduler } from '../src/online';
 import { MemoryOnlineStore } from '../src/onlineStore';
 
-async function setup(capacity = 4) {
+async function setup(capacity = 4, schedule?: OnlineScheduler) {
  const store = new MemoryOnlineStore();
  let time = 1_000_000;
- const app = onlineRoutes(store, () => 0, () => time);
+ const app = onlineRoutes(store, () => 0, () => time, schedule);
  const tokens: string[] = [];
  for (const name of ['Host', 'Second', 'Third', 'Fourth', 'Fifth']) {
    const res = await app.request('/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
@@ -120,5 +121,102 @@ describe('public online rooms', () => {
   expect((await s.snap(1)).room!.roster?.map(player => player.name)).toEqual(['Host', 'Second']);
   await s.cmd(1, { type: 'rematch' });
   expect((await s.snap(1)).room!.status).toBe('waiting');
+ });
+});
+
+function manualScheduler() {
+ const jobs = new Set<() => void>();
+ const delays: number[] = [];
+ const schedule: OnlineScheduler = (callback, delay) => {
+  delays.push(delay); jobs.add(callback); return () => { jobs.delete(callback); };
+ };
+ return { schedule, delays, size: () => jobs.size, step: () => {
+  const callback = jobs.values().next().value;
+  if (!callback) throw new Error('No scheduled AI action');
+  jobs.delete(callback); callback();
+ } };
+}
+describe('online AI seats and rent events', () => {
+ it('limits AI controls to hosts, occupies capacity, and keeps bots ready', async () => {
+  const jobs = manualScheduler(); const s = await setup(3, jobs.schedule); await join(s, 1);
+  expect((await s.cmd(1, { type: 'addAi', kind: 'random' })).status).toBe(409);
+  expect((await s.cmd(0, { type: 'addAi', kind: 'llm' })).status).toBe(400);
+  expect((await s.cmd(0, { type: 'addAi', kind: 'random' })).status).toBe(200);
+  const bot = (await s.snap(0)).room!.members.find(m => m.ai)!;
+  expect(bot).toMatchObject({ ready: true, connected: true });
+  expect((await s.cmd(0, { type: 'addAi', kind: 'random' })).status).toBe(409);
+  expect((await s.cmd(1, { type: 'setAi', guestId: bot.guestId, kind: 'greedy' })).status).toBe(409);
+  await s.cmd(0, { type: 'setAi', guestId: bot.guestId, kind: 'greedy' });
+  expect((await s.snap(0)).room!.members.find(m => m.ai)!.ai).toBe('greedy');
+  await s.cmd(0, { type: 'ready', ready: true }); await s.cmd(1, { type: 'ready', ready: true });
+  expect((await s.cmd(0, { type: 'start' })).status).toBe(200);
+  expect((await s.cmd(0, { type: 'remove', guestId: bot.guestId })).status).toBe(409);
+ });
+ it('drives bot actions once per version, pauses for humans, resumes after restart', async () => {
+  const jobs = manualScheduler(); const s = await setup(2, jobs.schedule);
+  await s.cmd(0, { type: 'addAi', kind: 'random' }); await s.cmd(0, { type: 'ready', ready: true }); await s.cmd(0, { type: 'start' });
+  await s.cmd(0, { type: 'rotate', rotation: 0 }); await s.cmd(0, { type: 'roll' });
+  await s.cmd(0, { type: 'place', placement: legalPlacements((await s.snap(0)).room!.state!)[0] });
+  const before = (await s.snap(0)).room!;
+  expect(jobs.size()).toBe(1);
+  await s.snap(0); await s.snap(0); expect(jobs.size()).toBe(1);
+  expect((await s.cmd(0, { type: 'rotate', rotation: 0 })).status).toBe(409);
+  jobs.step(); expect((await s.snap(0)).room!.state!.phase).toBe('move');
+  s.advance(36_000); jobs.step(); expect(jobs.size()).toBe(0);
+  expect((await s.snap(0)).room!.version).toBe(before.version + 1);
+  expect(jobs.size()).toBe(1);
+  jobs.step(); expect((await s.snap(0)).room!.state!.phase).toBe('place');
+  expect(jobs.delays.at(-1)).toBeGreaterThanOrEqual(3000);
+  const restartJobs = manualScheduler(); const app = onlineRoutes(s.store, () => 0, () => 1_036_000, restartJobs.schedule);
+  await app.request('/snapshot', { headers: { authorization: `Bearer ${s.tokens[0]}` } });
+  expect(restartJobs.size()).toBe(1); restartJobs.step();
+  const snapshot = await (await app.request('/snapshot', { headers: { authorization: `Bearer ${s.tokens[0]}` } })).json();
+  expect(snapshot.room.state.turnIndex).toBe(0);
+ });
+ it('never transfers host to bots and removes rooms when their last human leaves', async () => {
+  const s = await setup(); await s.cmd(0, { type: 'addAi', kind: 'random' }); await join(s, 1);
+  await s.cmd(0, { type: 'leave' });
+  expect((await s.snap(1)).room!.hostId).toBe((await s.snap(1)).guestId);
+  await s.cmd(1, { type: 'leave' }); expect((await s.snap(1)).rooms).toHaveLength(0);
+ });
+ it('finishes a mixed four-player match and broadcasts AI rent events', async () => {
+  const jobs = manualScheduler(); const s = await setup(4, jobs.schedule);
+  for (let i = 0; i < 3; i++) await s.cmd(0, { type: 'addAi', kind: 'random' });
+  await s.cmd(0, { type: 'ready', ready: true }); await s.cmd(0, { type: 'start' });
+  let botRent = false; let finished = false;
+  for (let step = 0; step < 1000; step++) {
+   s.advance(1000);
+   const room = (await s.snap(0)).room!;
+   botRent ||= !!room.payments?.some(payment => payment.payer !== 'c');
+   if (room.status === 'finished') { finished = true; break; }
+   const state = room.state!;
+   if (state.players[state.turnIndex].colour !== 'c') { jobs.step(); continue; }
+   const action = state.phase === 'rotate' ? { type: 'rotate', rotation: 0 }
+    : state.phase === 'move' ? { type: 'roll' }
+    : { type: 'place', placement: legalPlacements(state)[0] };
+   expect((await s.cmd(0, action)).status).toBe(200);
+  }
+  expect(finished).toBe(true); expect(botRent).toBe(true); expect(jobs.size()).toBe(0);
+  await s.cmd(0, { type: 'rematch' });
+  expect((await s.snap(0)).room!.payments).toEqual([]);
+ });
+ it.each([30, 1])('persists authoritative rent totals and idempotency with %i dirhams', async money => {
+  const s = await setup(2); await join(s, 1);
+  await s.cmd(0, { type: 'ready', ready: true }); await s.cmd(1, { type: 'ready', ready: true }); await s.cmd(0, { type: 'start' });
+  const data = JSON.parse(s.store.load()!); const room = data.rooms[0];
+  room.state.phase = 'move'; room.state.players[0].dirhams = money;
+  room.state.assam = { pos: { col: 3, row: 3 }, facing: 'N' };
+  room.state.board[3][2] = { colour: 'y', rugId: 1 }; room.state.board[3][1] = { colour: 'y', rugId: 1 };
+  s.store.save(JSON.stringify(data));
+  const app = onlineRoutes(s.store, () => 0, () => 1_000_000);
+  // Both human sessions must be observed after process restart.
+  for (const token of s.tokens.slice(0, 2)) await app.request('/snapshot', { headers: { authorization: `Bearer ${token}` } });
+  const roll = () => app.request('/command', { method: 'POST', headers: { authorization: `Bearer ${s.tokens[0]}`, 'content-type': 'application/json' }, body: JSON.stringify({ id: 'rent-roll', type: 'roll', version: room.version }) });
+  const response = await roll(); expect(response.status).toBe(200);
+  const next = (await response.json()).room;
+  expect(next.payments).toHaveLength(1);
+  expect(next.payments[0]).toMatchObject({ payer: 'c', owner: 'y', owed: 2, paid: Math.min(2, money), bankrupt: money < 2, payerDirhams: Math.max(0, money - 2), ownerDirhams: 30 + Math.min(2, money), die: 1, matchId: room.matchId });
+  expect(next.payments[0].ownerScore).toBe(32 + Math.min(2, money));
+  expect((await (await roll()).json()).room.payments).toEqual(next.payments);
  });
 });

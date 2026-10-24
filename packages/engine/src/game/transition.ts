@@ -1,5 +1,6 @@
 import { advanceTurn, applyPlacement, applyRotation, legalPlacements } from './moves';
 import type { Placement, RotateChoice } from './moves';
+import { countConnectedColour } from './board';
 import { moveAssam, rollDie, settlePayment } from './rules';
 import type { GameState } from './types';
 import type { Rng } from './setup';
@@ -16,6 +17,7 @@ export type GameAction = {
 export function transitionGame(state: GameState, action: GameAction, rng: Rng): {
   state: GameState;
   roll: number | null;
+  payment?: { payer: GameState['players'][number]['colour']; owner: GameState['players'][number]['colour']; owed: number; paid: number; bankrupt: boolean };
 } {
   if (action.type === 'rotate') {
     if (state.phase !== 'rotate' || ![0, 90, 270].includes(action.rotation))
@@ -29,7 +31,8 @@ export function transitionGame(state: GameState, action: GameAction, rng: Rng): 
     if (state.phase !== 'move')
       throw new Error('Rolling is not allowed now');
     const roll = rollDie(rng);
-    const payment = settlePayment(moveAssam(state, roll));
+    const moved = moveAssam(state, roll);
+    const payment = settlePayment(moved);
     let next = {
       ...payment.state,
       phase: 'place' as GameState['phase']
@@ -38,7 +41,8 @@ export function transitionGame(state: GameState, action: GameAction, rng: Rng): 
       next = advanceTurn(next);
     return {
       state: next,
-      roll
+      roll,
+      ...(payment.toColour ? { payment: { payer: state.players[state.turnIndex].colour, owner: payment.toColour, owed: countConnectedColour(moved.board, moved.assam.pos), paid: payment.paid, bankrupt: payment.bankrupt } } : {})
     };
   }
   const placementIsLegal = state.phase === 'place' && legalPlacements(state).some(p =>

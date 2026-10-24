@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { newGame, transitionGame, type OnlineSnapshot } from '@marrakech/engine';
+import { newGame, transitionGame, type OnlinePayment, type OnlineSnapshot } from '@marrakech/engine';
 import OnlineScreen from '../src/online/OnlineScreen';
 import { onlineRequest, readEvents, readSession } from '../src/online/transport';
 
@@ -23,6 +23,8 @@ function inRoom(revision = 2): OnlineSnapshot {
   } };
 }
 beforeEach(() => {
+  const storage = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) });
   window.history.replaceState(null, '', '/');
   vi.mocked(readSession).mockReturnValue({ guestId: 'host', name: 'Host', token: 'private' });
   vi.mocked(readEvents).mockImplementation((_token, signal, onData, connected) => {
@@ -31,9 +33,78 @@ beforeEach(() => {
   });
   vi.mocked(onlineRequest).mockResolvedValue(snapshot(99));
 });
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+function payment(id = 'rent-1'): OnlinePayment {
+  return { id, matchId: 'match', createdAt: Date.now(), die: 1, payer: 'c', owner: 'y', owed: 3, paid: 3, bankrupt: false, payerDirhams: 27, ownerDirhams: 33, payerScore: 27, ownerScore: 36 };
+}
 
 describe('online screens', () => {
+  it('shows rent after the shared dice/walk animation and dismisses without charging again', () => {
+    vi.useFakeTimers();
+    const value = inRoom();
+    value.room!.status = 'playing'; value.room!.matchId = 'match';
+    value.room!.state = { ...newGame(2, () => 0), phase: 'move' };
+    render(<OnlineScreen onBack={() => undefined} />);
+    act(() => deliver(value));
+    const rolled = structuredClone(value);
+    rolled.revision++; rolled.room!.version++; rolled.room!.lastRoll = 1;
+    rolled.room!.state = transitionGame(value.room!.state, { type: 'roll' }, () => 0).state;
+    rolled.room!.payments = [payment()];
+    act(() => deliver(rolled));
+    expect(screen.queryByRole('dialog', { name: 'Rent due' })).toBeNull();
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByRole('dialog', { name: 'Rent due' })).toBeTruthy();
+    expect(screen.getByText(/landed on/).textContent).toContain('pays 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(onlineRequest).not.toHaveBeenCalled();
+    act(() => deliver({ ...rolled, revision: rolled.revision + 1 }));
+    expect(screen.queryByRole('dialog', { name: 'Rent due' })).toBeNull();
+  });
+  it('queues each unseen rent event once and retains its original totals across later turns', () => {
+    const value = inRoom(); value.room!.status = 'playing'; value.room!.matchId = 'match'; value.room!.state = { ...newGame(2, () => 0), phase: 'place' };
+    render(<OnlineScreen onBack={() => undefined} />);
+    act(() => deliver(value));
+    const next = structuredClone(value); next.revision++;
+    next.room!.payments = [payment(), { ...payment('rent-2'), paid: 2, owed: 2 }];
+    act(() => deliver(next));
+    expect(screen.getByText(/landed on/).textContent).toContain('pays 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.getByText(/landed on/).textContent).toContain('pays 2');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    act(() => deliver({ ...next, revision: next.revision + 1 }));
+    expect(screen.queryByRole('dialog', { name: 'Rent due' })).toBeNull();
+  });
+  it('does not replay acknowledged rent after refresh, but shows a new bankruptcy event', () => {
+    const value = inRoom(); value.room!.status = 'playing'; value.room!.matchId = 'match'; value.room!.state = { ...newGame(2, () => 0), phase: 'place' }; value.room!.payments = [payment()];
+    const view = render(<OnlineScreen onBack={() => undefined} />);
+    act(() => deliver(value));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    view.unmount();
+    render(<OnlineScreen onBack={() => undefined} />);
+    act(() => deliver({ ...value, revision: 10 }));
+    expect(screen.queryByRole('dialog', { name: 'Rent due' })).toBeNull();
+    const next = structuredClone(value); next.revision = 11;
+    next.room!.payments!.push({ ...payment('bankruptcy'), paid: 0, bankrupt: true });
+    act(() => deliver(next));
+    expect(screen.getByText(/Bankrupt!/)).toBeTruthy();
+    expect(screen.getByText(/landed on/).textContent).toContain('pays 0');
+  });
+  it('lets the host add AI and edit its difficulty, but hides these controls from guests', async () => {
+    const value = inRoom();
+    value.room!.members[1] = { ...value.room!.members[1], guestId: 'bot:1', ai: 'random', name: 'AI random', ready: true };
+    render(<OnlineScreen onBack={() => undefined} />);
+    act(() => deliver(value));
+    fireEvent.change(screen.getByLabelText('AI difficulty', { exact: true }), { target: { value: 'search' } });
+    await waitFor(() => expect(onlineRequest).toHaveBeenCalledWith('command', 'private', expect.objectContaining({ type: 'setAi', guestId: 'bot:1', kind: 'search' })));
+    act(() => deliver({ ...value, revision: 100 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add AI', exact: true }));
+    await waitFor(() => expect(onlineRequest).toHaveBeenCalledWith('command', 'private', expect.objectContaining({ type: 'addAi', kind: 'greedy' })));
+    const notHost = structuredClone(value); notHost.revision = 101; notHost.room!.hostId = 'other';
+    act(() => deliver(notHost));
+    expect(screen.queryByRole('button', { name: 'Add AI', exact: true })).toBeNull();
+    expect(screen.queryByLabelText('AI difficulty', { exact: true })).toBeNull();
+  });
   it('finishes dice and movement even while unrelated snapshots keep arriving', () => {
     vi.useFakeTimers();
     const value = inRoom();

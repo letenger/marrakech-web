@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { assamPath, legalAnchors, legalSeconds, winnerOf, type OnlineCommand, type OnlineRoom, type OnlineSnapshot, type Coord, type GameState } from '@marrakech/engine';
+import { assamPath, legalAnchors, legalSeconds, winnerOf, type OnlineCommand, type OnlineRoom, type OnlineSnapshot, type OnlinePayment, type OnlineAiKind, type Coord, type GameState } from '@marrakech/engine';
 import { BoardView, type Overlay } from '../ui/BoardView';
 import { Controls } from '../ui/Controls';
 import { ScorePanel } from '../ui/ScorePanel';
 import { DiceRoll } from '../ui/DiceRoll';
+import { PaymentPrompt } from '../ui/PaymentPrompt';
+import { acknowledgeRent, rentReceipts } from './rentReceipts';
+import type { PlayerNames } from '../ui/players';
 import { defaultNames, PLAYER_HEX, PLAYER_NAME } from '../ui/players';
 import { onlineRequest, OnlineError, readEvents, readSession, saveSession, type GuestSession } from './transport';
 import './online.css';
@@ -11,6 +14,12 @@ import './online.css';
 type CommandInput = OnlineCommand extends infer C ? C extends OnlineCommand ? Omit<C, 'id' | 'version'> : never : never;
 type Send = (command: CommandInput) => void;
 type Motion = { roomId: string; version: number; state: GameState; die: 1 | 2 | 3 | 4; rolling: boolean };
+type PendingRent = { payment: OnlinePayment; names: PlayerNames };
+const AI_OPTIONS: { kind: OnlineAiKind; label: string }[] = [
+  { kind: 'random', label: 'Random · easy' },
+  { kind: 'greedy', label: 'Greedy · medium' },
+  { kind: 'search', label: 'Search · hard' },
+];
 
 export default function OnlineScreen({ onBack }: { onBack: () => void }) {
   const [session, setSession] = useState(readSession);
@@ -21,6 +30,8 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [motion, setMotion] = useState<Motion | null>(null);
+  const [pendingRents, setPendingRents] = useState<PendingRent[]>([]);
+  const seenRents = useRef(new Set<string>());
   const motionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [invite, setInvite] = useState(() => new URLSearchParams(window.location.search).get('room') ?? '');
   const commandLock = useRef(false);
@@ -40,6 +51,17 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
       window.history.replaceState(null, '', url);
     }
     const oldRoom = previous?.room;
+    const sameMatch = oldRoom?.id === next.room?.id && oldRoom?.matchId === next.room?.matchId;
+    if (!sameMatch) seenRents.current.clear();
+    const events = next.room?.payments ?? [];
+    const acknowledged = next.room?.matchId ? rentReceipts(next.guestId, next.room.matchId) : new Set<string>();
+    // Rejoining does not replay the whole match's historical rent dialogs.
+    const candidates = sameMatch ? events : events.slice(-1).filter(event => Date.now() - event.createdAt < 30_000);
+    const names = defaultNames();
+    (next.room?.roster?.length ? next.room.roster : next.room?.members ?? []).forEach(member => { names[member.colour] = member.name; });
+    const incoming = candidates.filter(event => !seenRents.current.has(event.id) && !acknowledged.has(event.id)).map(payment => ({ payment, names }));
+    for (const event of events) seenRents.current.add(event.id);
+    if (!sameMatch || incoming.length) setPendingRents(queue => sameMatch ? [...queue, ...incoming] : incoming);
     if (!oldRoom || next.room?.id !== oldRoom.id || next.room.version !== oldRoom.version) {
       clearTimeout(motionTimer.current);
       setMotion(null);
@@ -80,6 +102,7 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
         setConnected(false);
         if (cause instanceof OnlineError && cause.status === 401) {
           saveSession(null); setSession(null); setSnapshot(null); snapshotRef.current = null;
+          clearTimeout(motionTimer.current); setMotion(null); setPendingRents([]); seenRents.current.clear();
           setError('Your guest session expired. Enter your name to join again.');
           return;
         }
@@ -90,6 +113,13 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
     void connect();
     return () => { controller.abort(); clearTimeout(retry); };
   }, [session]);
+
+  const dismissRent = useCallback(() => {
+    const payment = pendingRents[0]?.payment;
+    if (!payment) return;
+    if (session) acknowledgeRent(session.guestId, payment.matchId, payment.id);
+    setPendingRents(queue => queue.slice(1));
+  }, [pendingRents, session]);
 
   async function enter(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -149,9 +179,10 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
     {!session ? <section className="online-card online-entry"><h2>Join the public lobby</h2><p>Choose a name other players will see. No account needed.</p>
       <form onSubmit={event => { void enter(event); }}><label>Display name<input required minLength={1} maxLength={24} value={name} onChange={event => setName(event.target.value)} autoComplete="nickname" /></label><button className="primary" disabled={busy || !name.trim()}>Enter lobby</button></form>
       {invite && <p>Your room invitation will be available after you enter.</p>}
-    </section> : !snapshot ? <p role="status">Loading rooms…</p> : room ? <RoomView key={room.id} room={room} guestId={session.guestId} send={send} disabled={busy || !connected || motion !== null} displayState={motion?.roomId === room.id && motion.version === room.version ? motion.state : undefined} /> :
+    </section> : !snapshot ? <p role="status">Loading rooms…</p> : room ? <RoomView key={room.id} room={room} guestId={session.guestId} send={send} disabled={busy || !connected || motion !== null || pendingRents.length > 0} displayState={motion?.roomId === room.id && motion.version === room.version ? motion.state : undefined} /> :
       <Lobby snapshot={snapshot} send={send} disabled={busy || !connected} invite={invite} clearInvite={clearInvite} />}
     {motion?.rolling && <DiceRoll value={motion.die} onDone={finishDice} />}
+    {!motion && pendingRents[0] && <PaymentPrompt key={pendingRents[0].payment.id} r={pendingRents[0].payment} names={pendingRents[0].names} onContinue={dismissRent} />}
   </div>;
 }
 
@@ -186,6 +217,7 @@ function Lobby({ snapshot, send, disabled, invite, clearInvite }: { snapshot: On
 function RoomView({ room, guestId, send, disabled, displayState }: { room: OnlineRoom; guestId: string; send: Send; disabled: boolean; displayState?: GameState }) {
   const [copied, setCopied] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [aiKind, setAiKind] = useState<OnlineAiKind>('greedy');
   const me = room.members.find(member => member.guestId === guestId);
   const host = room.hostId === guestId;
   const playing = room.status === 'playing';
@@ -203,14 +235,16 @@ function RoomView({ room, guestId, send, disabled, displayState }: { room: Onlin
     </section>
     <div className="online-members">{room.members.map(member => <article className="online-card" key={member.guestId}>
       <h3><span className="swatch" style={{ background: PLAYER_HEX[member.colour] }} /> {member.name}{member.guestId === guestId ? ' (you)' : ''}</h3>
-      <p>{member.guestId === room.hostId ? 'Host · ' : ''}{member.connected ? waiting ? member.ready ? 'Ready' : 'Not ready' : 'Connected' : 'Disconnected'}</p>
+      <p>{member.guestId === room.hostId ? 'Host · ' : ''}{member.ai ? `AI · ${AI_OPTIONS.find(option => option.kind === member.ai)?.label}` : member.connected ? waiting ? member.ready ? 'Ready' : 'Not ready' : 'Connected' : 'Disconnected'}</p>
+      {waiting && host && member.ai && <label>AI difficulty<select disabled={disabled} value={member.ai} onChange={event => send({ type: 'setAi', guestId: member.guestId, kind: event.target.value as OnlineAiKind })}>{AI_OPTIONS.map(option => <option key={option.kind} value={option.kind}>{option.label}</option>)}</select></label>}
       {waiting && member.guestId === guestId && <label>Rug colour<select disabled={disabled} value={member.colour} onChange={event => send({ type: 'colour', colour: event.target.value as typeof member.colour })}>
         {Object.entries(PLAYER_NAME).map(([colour, label]) => <option key={colour} value={colour} disabled={room.members.some(other => other.guestId !== guestId && other.colour === colour)}>{label}</option>)}
       </select></label>}
       {waiting && host && member.guestId !== guestId && <button disabled={disabled} onClick={() => send({ type: 'remove', guestId: member.guestId })}>Remove player</button>}
     </article>)}</div>
-    {waiting && <div className="online-lobby"><section className="online-card"><h2>Get ready</h2><p>Choose your colour, then mark yourself ready. The host can start with 2–{room.capacity} players once everyone is connected and ready.</p><p>Changes to players or colours reset everyone’s readiness.</p>
+    {waiting && <div className="online-lobby"><section className="online-card"><h2>Get ready</h2><p>Choose your colour, then mark yourself ready. The host can start with 2–{room.capacity} players once everyone is connected and ready. AI seats are ready automatically.</p><p>Changes to players or colours reset human players’ readiness.</p>
       {host && <label>Maximum players<select disabled={disabled} value={room.capacity} onChange={event => send({ type: 'capacity', capacity: Number(event.target.value) })}>{[2, 3, 4].map(capacity => <option key={capacity} value={capacity} disabled={capacity < room.members.length}>{capacity} players</option>)}</select></label>}
+      {host && <div className="online-ai-seats"><h3>AI seats</h3><p>Fill an open seat with a server-controlled opponent.</p><label>New AI difficulty<select value={aiKind} disabled={disabled} onChange={event => setAiKind(event.target.value as OnlineAiKind)}>{AI_OPTIONS.map(option => <option key={option.kind} value={option.kind}>{option.label}</option>)}</select></label><button disabled={disabled || room.members.length >= room.capacity} onClick={() => send({ type: 'addAi', kind: aiKind })}>{room.members.length >= room.capacity ? 'Room full' : 'Add AI'}</button></div>}
       <div className="online-actions"><button className="primary" disabled={disabled} onClick={() => send({ type: 'ready', ready: !me?.ready })}>{me?.ready ? 'Not ready' : 'Ready to play'}</button>
         {host && <button disabled={disabled || !canStart} onClick={() => send({ type: 'start' })}>Start game</button>}</div>
     </section>{host && <section className="online-card"><h2>Join requests</h2>{room.requests.length === 0 ? <p>No pending requests.</p> : room.requests.map(request => <div className="online-request" key={request.guestId}><strong>{request.name}</strong><div className="online-actions"><button disabled={disabled || room.members.length >= room.capacity} onClick={() => send({ type: 'accept', guestId: request.guestId })}>Accept</button><button disabled={disabled} onClick={() => send({ type: 'decline', guestId: request.guestId })}>Decline</button></div></div>)}</section>}</div>}
@@ -225,7 +259,7 @@ function OnlineBoard({ room, state, guestId, send, disabled, walking }: { room: 
   const names = defaultNames();
   (room.roster?.length ? room.roster : room.members).forEach(member => { names[member.colour] = member.name; });
   const current = room.members.find(member => member.colour === state.players[state.turnIndex].colour);
-  const paused = room.members.some(member => !member.connected);
+  const paused = room.members.some(member => !member.ai && !member.connected);
   const active = room.status === 'playing' && current?.guestId === guestId && !disabled && !paused;
   const winner = room.status === 'finished' && !room.abandoned && state.phase === 'gameover' ? winnerOf(state) : null;
   let overlays: Overlay[] = [];
@@ -233,7 +267,7 @@ function OnlineBoard({ room, state, guestId, send, disabled, walking }: { room: 
     overlays = anchor ? [{ coord: anchor, variant: 'selected' }, ...legalSeconds(state, anchor).map(second => ({ coord: second, variant: 'second' as const, onClick: () => send({ type: 'place', placement: { anchor, second } }) }))] :
       legalAnchors(state).map(coord => ({ coord, variant: 'anchor', onClick: () => setSelection({ version: room.version, anchor: coord }) }));
   }
-  const message = room.abandoned ? 'This match was abandoned.' : paused ? 'Match paused — waiting for disconnected players to return.' : active ? 'Your turn.' : `Waiting for ${current?.name ?? 'the next player'}.`;
+  const message = room.abandoned ? 'This match was abandoned.' : paused ? 'Match paused — waiting for disconnected players to return.' : active ? 'Your turn.' : current?.ai ? `${current.name} is thinking…` : `Waiting for ${current?.name ?? 'the next player'}.`;
   return <section className="layout online-game"><BoardView state={state} overlays={overlays} walking={walking} /><div className="side">
     <Controls state={state} die={room.lastRoll} message={message} winner={winner} names={names} busy={!active} canCancel={!!anchor && active} onCancel={() => setSelection(null)} onRotate={rotation => send({ type: 'rotate', rotation })} onRoll={() => send({ type: 'roll' })} />
     {room.lastRoll !== null && <p className="online-die" role="status">🎲 Last roll: {room.lastRoll}</p>}
