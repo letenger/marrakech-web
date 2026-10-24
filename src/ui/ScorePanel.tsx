@@ -5,13 +5,14 @@ import { PLAYER_HEX } from './players';
 import type { PlayerNames } from './players';
 import coinGold from '../assets/coin_gold.png';
 
-export function ScorePanel({ state, names }: { state: GameState; names: PlayerNames }) {
+export function ScorePanel({ state, names, lastRoll }: { state: GameState; names: PlayerNames; lastRoll?: number | null }) {
   return (
     <aside className="score-panel">
       <h2>Players</h2>
       <p className="score-legend">
         <span><img className="coin" src={coinGold} alt="" /> Dirhams</span>
         <span><span aria-hidden="true">🧶</span> Rugs</span>
+        {lastRoll !== undefined && <span aria-label={lastRoll === null ? 'Waiting for the first roll' : `Last roll: ${lastRoll}`} title="Last roll"><span aria-hidden="true">🎲</span> {lastRoll ?? '—'}</span>}
       </p>
       {state.players.map((p, i) => (
         <div

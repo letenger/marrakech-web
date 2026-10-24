@@ -40,6 +40,25 @@ function payment(id = 'rent-1'): OnlinePayment {
 }
 
 describe('online screens', () => {
+  it('reuses the local brass menu without offering a private restart of an online game', () => {
+    const value = inRoom(); value.room!.status = 'playing'; value.room!.matchId = 'match'; value.room!.state = newGame(2, () => 0);
+    const onBack = vi.fn();
+    render(<OnlineScreen onBack={onBack} />);
+    act(() => deliver(value));
+    expect(screen.getByRole('button', { name: 'Menu', exact: true }).className).toBe('menu-btn');
+    expect(screen.queryByRole('button', { name: 'Home', exact: true })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Menu', exact: true }));
+    expect(screen.getByRole('dialog', { name: 'Online menu' })).toBeTruthy();
+    expect(screen.getByText(/Online play continues/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Restart game' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume', exact: true }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(onlineRequest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Menu', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Home', exact: true }));
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(onlineRequest).not.toHaveBeenCalled();
+  });
   it('shows rent after the shared dice/walk animation and dismisses without charging again', () => {
     vi.useFakeTimers();
     const value = inRoom();
@@ -168,6 +187,7 @@ describe('online screens', () => {
     const value = inRoom(); value.room!.status = 'playing'; value.room!.state = newGame(2, () => 0);
     render(<OnlineScreen onBack={() => undefined} />);
     act(() => deliver(value));
+    fireEvent.click(screen.getByRole('button', { name: 'Menu', exact: true }));
     fireEvent.click(screen.getByRole('button', { name: 'Leave match' }));
     expect(onlineRequest).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'End match and leave' }));

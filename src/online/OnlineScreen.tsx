@@ -5,6 +5,8 @@ import { Controls } from '../ui/Controls';
 import { ScorePanel } from '../ui/ScorePanel';
 import { DiceRoll } from '../ui/DiceRoll';
 import { PaymentPrompt } from '../ui/PaymentPrompt';
+import { GameMenu } from '../ui/GameMenu';
+import { useDialog } from '../ui/useDialog';
 import { acknowledgeRent, rentReceipts } from './rentReceipts';
 import type { PlayerNames } from '../ui/players';
 import { defaultNames, PLAYER_HEX, PLAYER_NAME } from '../ui/players';
@@ -31,6 +33,9 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
   const [notice, setNotice] = useState('');
   const [motion, setMotion] = useState<Motion | null>(null);
   const [pendingRents, setPendingRents] = useState<PendingRent[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
   const seenRents = useRef(new Set<string>());
   const motionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [invite, setInvite] = useState(() => new URLSearchParams(window.location.search).get('room') ?? '');
@@ -162,18 +167,22 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
     window.history.replaceState(null, '', url);
   }
 
+  async function copyMenuInvite() {
+    const currentRoom = snapshot?.room;
+    if (!currentRoom) return;
+    const url = new URL(window.location.href); url.searchParams.set('room', currentRoom.code);
+    try { await navigator.clipboard.writeText(url.toString()); setCopiedInvite(true); }
+    catch { setNotice(`Room code: ${currentRoom.code}`); setMenuOpen(false); }
+  }
+
   const room = snapshot?.room;
-  return <div className="app scene online-shell">
-    <header className="online-header">
-      <div><h1>Marrakech online</h1><p>{room ? room.name : 'Find a table in the souk'}</p></div>
-      <div className="online-actions">
-        {session && snapshot && !room && !snapshot.pendingRequest && <button disabled={busy} onClick={() => {
-          saveSession(null); setName(session.name); setSession(null); setSnapshot(null); snapshotRef.current = null; setConnected(false); setError(''); setNotice('');
-        }}>Change name</button>}
-        <button onClick={onBack}>Home</button>
-      </div>
+  const inMatch = !!room?.state;
+  return <div className={`app scene online-shell${inMatch ? ' online-match' : ''}`}>
+    <header className="app-header game-header online-header">
+      <div><h1>Marrakech</h1><p className="tagline">{inMatch ? 'Rug merchants of the medina' : 'Online · Find a table in the souk'}</p></div>
+      <button type="button" className="menu-btn" aria-label="Menu" onClick={() => setMenuOpen(true)}>❖</button>
     </header>
-    {session && <p className="online-connection" role="status">{session.name} · {connected ? 'Connected' : 'Connecting…'}{!connected && ' — play is paused until you reconnect'}</p>}
+    {session && <p className="online-connection" role="status">{inMatch && <><span className="online-room-name">{room.name}</span><span> · {room.code} · </span></>}<span>{session.name} · {connected ? 'Connected' : 'Connecting…'}{!connected && ' — waiting to reconnect'}</span></p>}
     {error && <p className="online-error" role="alert">{error}</p>}
     {notice && <p className="online-notice" role="status">{notice}</p>}
     {!session ? <section className="online-card online-entry"><h2>Join the public lobby</h2><p>Choose a name other players will see. No account needed.</p>
@@ -183,7 +192,39 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
       <Lobby snapshot={snapshot} send={send} disabled={busy || !connected} invite={invite} clearInvite={clearInvite} />}
     {motion?.rolling && <DiceRoll value={motion.die} onDone={finishDice} />}
     {!motion && pendingRents[0] && <PaymentPrompt key={pendingRents[0].payment.id} r={pendingRents[0].payment} names={pendingRents[0].names} onContinue={dismissRent} />}
+    {menuOpen && !pendingRents.length && !motion?.rolling && <GameMenu
+      title="Online menu"
+      description={inMatch ? 'Online play continues while this menu is open.' : undefined}
+      quitLabel="Home"
+      onResume={() => setMenuOpen(false)}
+      onQuit={() => { setMenuOpen(false); onBack(); }}
+    >
+      {room && <button type="button" className="menu-item" onClick={() => { void copyMenuInvite(); }}>{copiedInvite ? 'Invite link copied' : 'Copy invite link'}</button>}
+      {room && <button type="button" className="menu-item danger" disabled={busy || !connected} onClick={() => {
+        setMenuOpen(false);
+        if (room.status === 'playing') setConfirmLeave(true);
+        else send({ type: 'leave' });
+      }}>Leave {room.status === 'playing' ? 'match' : 'room'}</button>}
+      {session && snapshot && !room && !snapshot.pendingRequest && <button type="button" className="menu-item" disabled={busy} onClick={() => {
+        saveSession(null); setName(session.name); setSession(null); setSnapshot(null); snapshotRef.current = null; setConnected(false); setError(''); setNotice(''); setMenuOpen(false);
+      }}>Change name</button>}
+    </GameMenu>}
+    {confirmLeave && room?.status === 'playing' && !pendingRents.length && <LeaveMatchDialog
+      disabled={busy || !connected}
+      onCancel={() => setConfirmLeave(false)}
+      onLeave={() => { setConfirmLeave(false); send({ type: 'leave' }); }}
+    />}
   </div>;
+}
+
+function LeaveMatchDialog({ disabled, onCancel, onLeave }: { disabled: boolean; onCancel: () => void; onLeave: () => void }) {
+  const ref = useDialog<HTMLDivElement>(onCancel);
+  return <div className="overlay-backdrop" onClick={onCancel}><div className="menu-card" role="alertdialog" aria-modal="true" aria-label="Leave online match" tabIndex={-1} ref={ref} onClick={event => event.stopPropagation()}>
+    <h2 className="menu-title">Leave match?</h2>
+    <p className="menu-description">Leaving ends this match for everyone without a winner.</p>
+    <button type="button" className="menu-item primary" onClick={onCancel}>Keep playing</button>
+    <button type="button" className="menu-item danger" disabled={disabled} onClick={onLeave}>End match and leave</button>
+  </div></div>;
 }
 
 function Lobby({ snapshot, send, disabled, invite, clearInvite }: { snapshot: OnlineSnapshot; send: Send; disabled: boolean; invite: string; clearInvite: () => void }) {
@@ -216,22 +257,23 @@ function Lobby({ snapshot, send, disabled, invite, clearInvite }: { snapshot: On
 
 function RoomView({ room, guestId, send, disabled, displayState }: { room: OnlineRoom; guestId: string; send: Send; disabled: boolean; displayState?: GameState }) {
   const [copied, setCopied] = useState(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
   const [aiKind, setAiKind] = useState<OnlineAiKind>('greedy');
   const me = room.members.find(member => member.guestId === guestId);
   const host = room.hostId === guestId;
-  const playing = room.status === 'playing';
   const waiting = room.status === 'waiting';
   const canStart = waiting && room.members.length >= 2 && room.members.every(member => member.ready && member.connected);
   async function copyInvite() {
     const url = new URL(window.location.href); url.searchParams.set('room', room.code);
     try { await navigator.clipboard.writeText(url.toString()); setCopied(true); } catch { setCopied(false); }
   }
+  if (!waiting && room.state) return <main className="online-match-content">
+    <OnlineBoard key={room.matchId} room={room} state={displayState ?? room.state} guestId={guestId} send={send} disabled={disabled} walking={!!displayState} />
+    {room.status === 'finished' && <section className="online-result"><p>{room.abandoned ? 'Match abandoned — no winner.' : 'Match complete.'}</p>{host ? <button disabled={disabled} onClick={() => send({ type: 'rematch' })}>Return to waiting room</button> : <p>Waiting for the host to return to the room.</p>}</section>}
+  </main>;
   return <main>
     <section className="online-card online-room-heading"><div><h2>{room.name}</h2><p>Room code: <strong>{room.code}</strong> · {room.members.length}/{room.capacity} players</p></div>
       <div className="online-actions"><button onClick={() => { void copyInvite(); }}>{copied ? 'Invite link copied' : 'Copy invite link'}</button>
-        <button disabled={disabled} onClick={() => playing ? setConfirmLeave(true) : send({ type: 'leave' })}>Leave {playing ? 'match' : 'room'}</button></div>
-      {confirmLeave && <div className="online-notice" role="alert"><p>Leaving ends this match for everyone without a winner.</p><button disabled={disabled} onClick={() => send({ type: 'leave' })}>End match and leave</button><button onClick={() => setConfirmLeave(false)}>Keep playing</button></div>}
+        <button disabled={disabled} onClick={() => send({ type: 'leave' })}>Leave room</button></div>
     </section>
     <div className="online-members">{room.members.map(member => <article className="online-card" key={member.guestId}>
       <h3><span className="swatch" style={{ background: PLAYER_HEX[member.colour] }} /> {member.name}{member.guestId === guestId ? ' (you)' : ''}</h3>
@@ -248,8 +290,6 @@ function RoomView({ room, guestId, send, disabled, displayState }: { room: Onlin
       <div className="online-actions"><button className="primary" disabled={disabled} onClick={() => send({ type: 'ready', ready: !me?.ready })}>{me?.ready ? 'Not ready' : 'Ready to play'}</button>
         {host && <button disabled={disabled || !canStart} onClick={() => send({ type: 'start' })}>Start game</button>}</div>
     </section>{host && <section className="online-card"><h2>Join requests</h2>{room.requests.length === 0 ? <p>No pending requests.</p> : room.requests.map(request => <div className="online-request" key={request.guestId}><strong>{request.name}</strong><div className="online-actions"><button disabled={disabled || room.members.length >= room.capacity} onClick={() => send({ type: 'accept', guestId: request.guestId })}>Accept</button><button disabled={disabled} onClick={() => send({ type: 'decline', guestId: request.guestId })}>Decline</button></div></div>)}</section>}</div>}
-    {room.state && <OnlineBoard key={room.matchId} room={room} state={displayState ?? room.state} guestId={guestId} send={send} disabled={disabled} walking={!!displayState} />}
-    {room.status === 'finished' && <section className="online-card"><h2>{room.abandoned ? 'Match abandoned' : 'Match complete'}</h2>{room.abandoned && <p>A player left. No winner is recorded.</p>}<p>The host can return the remaining players to the waiting room for another game.</p>{host && <button className="primary" disabled={disabled} onClick={() => send({ type: 'rematch' })}>Return to waiting room</button>}</section>}
   </main>;
 }
 
@@ -270,7 +310,6 @@ function OnlineBoard({ room, state, guestId, send, disabled, walking }: { room: 
   const message = room.abandoned ? 'This match was abandoned.' : paused ? 'Match paused — waiting for disconnected players to return.' : active ? 'Your turn.' : current?.ai ? `${current.name} is thinking…` : `Waiting for ${current?.name ?? 'the next player'}.`;
   return <section className="layout online-game"><BoardView state={state} overlays={overlays} walking={walking} /><div className="side">
     <Controls state={state} die={room.lastRoll} message={message} winner={winner} names={names} busy={!active} canCancel={!!anchor && active} onCancel={() => setSelection(null)} onRotate={rotation => send({ type: 'rotate', rotation })} onRoll={() => send({ type: 'roll' })} />
-    {room.lastRoll !== null && <p className="online-die" role="status">🎲 Last roll: {room.lastRoll}</p>}
-    <ScorePanel state={state} names={names} />
+    <ScorePanel state={state} names={names} lastRoll={room.lastRoll} />
   </div></section>;
 }

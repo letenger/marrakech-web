@@ -62,3 +62,9 @@ The frontend is deployed by the GitHub integration to Vercel. Set `VITE_API_URL`
 Run `npm test`, `npm run build`, and `npm run typecheck:api`. The automated coverage includes full rule-engine matches with 2/3/4 players, illegal moves, host permissions, readiness, capacity races, duplicate actions, persistence restoration, disconnected match retention, stale snapshots, disabled opponent controls, and explicit abandonment confirmation.
 
 Manual browser checks should use two independent guest identities: create → request → approve → ready → start → rotate/roll/place → refresh/reconnect → leave/rematch. For release, also exercise a full match on separate computers over the internet and a backend restart on durable storage.
+
+## Shared game interface
+
+Online matches reuse the local game's header, brass menu button, menu/rules dialogs, board, controls, and score panel. Room metadata is shown in a compact status line during play; invitation, Home, and leave actions are available in the menu. Online menus do not pause the server, and leaving an active match still requires confirmation.
+
+The board responds to both viewport height and width. Controls reserve a fixed size across direction, roll, and placement phases, while the most recent die result sits beside the score legend. Desktop uses board/sidebar columns; narrow portrait screens stack the board above controls and scores in two columns. Very short windows retain scrolling rather than hiding controls.
