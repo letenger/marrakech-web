@@ -4,11 +4,16 @@ import { createApp } from './app';
 import { openaiComplete } from './openai';
 import { anthropicComplete } from './anthropic';
 import { SqliteStore } from './store';
+import { SqliteOnlineStore } from './onlineStore';
 
 function pickComplete(): Complete {
-  const provider = (process.env.LLM_PROVIDER ?? 'openai').toLowerCase();
-  if (provider === 'anthropic') return anthropicComplete();
-  return openaiComplete();
+  let complete: Complete | undefined;
+  return (prompt) => {
+    complete ??= (process.env.LLM_PROVIDER ?? 'openai').toLowerCase() === 'anthropic'
+      ? anthropicComplete()
+      : openaiComplete();
+    return complete(prompt);
+  };
 }
 
 const port = Number(process.env.PORT ?? 8787);
@@ -16,6 +21,7 @@ const app = createApp({
   complete: pickComplete(),
   store: new SqliteStore(process.env.DB_PATH ?? 'marrakech.db'),
   webOrigin: process.env.WEB_ORIGIN,
+  onlineStore: new SqliteOnlineStore(process.env.ONLINE_DB_PATH ?? 'marrakech-online.db'),
 });
 
 serve({ fetch: app.fetch, port });

@@ -7,10 +7,12 @@ export function HomeScreen({
   resumable = false,
   onResume,
   onNewGame,
+  onOnline,
 }: {
   resumable?: boolean;
   onResume?: () => void;
   onNewGame: () => void;
+  onOnline?: () => void;
 }) {
   const [showRules, setShowRules] = useState(false);
 
@@ -33,6 +35,7 @@ export function HomeScreen({
           <button type="button" className="home-btn" onClick={() => setShowRules(true)}>
             How to Play
           </button>
+          {onOnline && <button type="button" className="home-btn" onClick={onOnline}>Play online</button>}
         </div>
       </div>
 

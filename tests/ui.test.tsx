@@ -7,6 +7,9 @@ import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import App from '../src/App';
 import { GameScreen } from '../src/ui/GameScreen';
 import { defaultNames, defaultSeats } from '../src/ui/players';
+import { Controls } from '../src/ui/Controls';
+import { BoardView } from '../src/ui/BoardView';
+import { newGame, type Facing } from '@marrakech/engine';
 
 // jsdom here doesn't expose localStorage; provide a minimal in-memory shim.
 if (typeof globalThis.localStorage === 'undefined') {
@@ -35,6 +38,70 @@ afterEach(() => {
 
 const config = () => ({ count: 2, names: defaultNames(), seats: defaultSeats() });
 
+describe('board-relative direction controls', () => {
+  it('uses the printed corner loop only when walking, not when choosing a direction', () => {
+    const original = Element.prototype.animate;
+    const animate = vi.fn((_frames: Keyframe[], _options: KeyframeAnimationOptions) => ({ cancel: vi.fn() }));
+    Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: animate });
+    try {
+      const start = newGame(2, () => 0);
+      start.assam = { pos: { col: 6, row: 0 }, facing: 'E' };
+      const end = { ...start, assam: { ...start.assam, facing: 'S' as const } };
+      const view = render(<BoardView state={start} />);
+      view.rerender(<BoardView state={end} walking />);
+      const walkingFrames = animate.mock.calls[0][0];
+      expect(walkingFrames.length).toBeGreaterThan(2);
+      expect(walkingFrames[0].transform).toBe('rotate(90deg)');
+      expect(walkingFrames.at(-1)!.transform).toBe('rotate(-180deg)');
+      expect(animate).toHaveBeenCalledTimes(2); // piece and its direction marker
+      view.unmount();
+      animate.mockClear();
+      const manual = render(<BoardView state={start} />);
+      manual.rerender(<BoardView state={end} />);
+      expect(animate.mock.calls[0][0]).toEqual([
+        { transform: 'rotate(90deg)' }, { transform: 'rotate(180deg)' },
+      ]);
+    } finally {
+      if (original) Object.defineProperty(Element.prototype, 'animate', { configurable: true, writable: true, value: original });
+      else Reflect.deleteProperty(Element.prototype, 'animate');
+    }
+  });
+
+  it.each([
+    { facing: 'N', blocked: 'down', up: 0, right: 90, left: 270 },
+    { facing: 'E', blocked: 'left', up: 270, right: 0, down: 90 },
+    { facing: 'S', blocked: 'up', right: 270, down: 0, left: 90 },
+    { facing: 'W', blocked: 'right', up: 90, down: 270, left: 0 },
+  ])('uses fixed board directions when Assam faces $facing', ({ facing, blocked, ...allowed }) => {
+    const state = newGame(2, () => 0);
+    state.assam.facing = facing as Facing;
+    const onRotate = vi.fn();
+    render(<Controls state={state} names={defaultNames()} die={null} message="Choose a direction" winner={null} canCancel={false} onRotate={onRotate} onRoll={() => {}} onCancel={() => {}} />);
+    const back = screen.getByRole('button', { name: `Face ${blocked}` }) as HTMLButtonElement;
+    expect(back.disabled).toBe(true);
+    fireEvent.click(back);
+    expect(onRotate).not.toHaveBeenCalled();
+    for (const [direction, degrees] of Object.entries(allowed)) {
+      const button = screen.getByRole('button', { name: `Face ${direction}` }) as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+      fireEvent.click(button);
+      expect(onRotate).toHaveBeenLastCalledWith(degrees);
+    }
+  });
+
+  it('locks all directions while busy', () => {
+    render(<Controls state={newGame(2, () => 0)} names={defaultNames()} die={null} message="Waiting" winner={null} busy canCancel={false} onRotate={() => {}} onRoll={() => {}} onCancel={() => {}} />);
+    for (const button of screen.getAllByRole('button', { name: /^Face / })) expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each([['N', 'up'], ['E', 'right'], ['S', 'down'], ['W', 'left']] as const)('marks Assam’s board facing %s', (facing, direction) => {
+    const state = newGame(2, () => 0);
+    state.assam.facing = facing;
+    render(<BoardView state={state} />);
+    expect(screen.getByRole('img', { name: `Assam faces ${direction}` })).toBeTruthy();
+  });
+});
+
 describe('scene navigation', () => {
   it('walks Home → Setup → Play', () => {
     render(<App />);
@@ -44,7 +111,7 @@ describe('scene navigation', () => {
     expect(screen.getByRole('button', { name: 'Start Market' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Market' }));
-    expect(screen.getByText(/rotate Assam/i)).toBeTruthy();
+    expect(screen.getByText(/choose a direction on the board/i)).toBeTruthy();
   });
 });
 
@@ -55,7 +122,7 @@ describe('turn flow', () => {
     render(<GameScreen config={config()} onExit={() => {}} />);
 
     // Rotate step → move step.
-    fireEvent.click(screen.getByRole('button', { name: /Keep straight/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Face up' }));
     expect(screen.getByText(/roll the die/i)).toBeTruthy();
 
     // Roll → dice overlay → walk → settle.

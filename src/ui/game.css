@@ -183,6 +183,21 @@ body {
   transition: background 0.25s, box-shadow 0.25s;
 }
 
+.score-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: -4px 0 12px;
+  color: #795c36;
+  font-size: .8rem;
+}
+
+.score-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 /* active turn: a soft aura tinted with the player's own rug colour */
 .player-row.is-turn {
   background: rgba(255, 250, 236, 0.7);
@@ -561,3 +576,24 @@ body {
   transform: translateY(3px);
   box-shadow: 0 0 0 #5c2a0d, var(--inner-sink);
 }
+
+/* Board-fixed directions: north/up stays at the top, regardless of Assam. */
+.direction-picker { text-align: center; }
+.direction-label { margin: 4px 0 12px; font-weight: 600; color: var(--ink-soft); }
+.direction-pad { display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(3, 54px); gap: 7px; justify-content: center; }
+.direction-N { grid-area: 1 / 2; }
+.direction-E { grid-area: 2 / 3; }
+.direction-S { grid-area: 3 / 2; }
+.direction-W { grid-area: 2 / 1; }
+.controls .direction-button, .online-shell .controls .direction-button { padding: 0; font-size: 30px; line-height: 1; }
+.controls .direction-button:disabled { opacity: .3; box-shadow: none; }
+.controls .direction-button:focus-visible { outline: 3px solid #247e8a; outline-offset: 3px; }
+.direction-center { grid-area: 2 / 2; display: grid; place-items: center; border-radius: 50%; background: rgba(180,139,80,.12); }
+.direction-preview { width: 44px; height: 44px; position: relative; }
+.direction-preview img { position: absolute; inset: 5px; width: 34px; height: 34px; object-fit: contain; }
+.direction-preview-tip { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); color: #70401f; font-size: 16px; line-height: 1; text-shadow: 0 1px #fff6d9; }
+.direction-facing { margin: 12px 0 5px; font-size: .9rem; color: var(--ink-soft); }
+.direction-facing strong { text-transform: capitalize; }
+.direction-rule { margin: 0; color: #795c36; font-size: .8rem; line-height: 1.5; }
+.assam-heading { position: absolute; z-index: 1001; pointer-events: none; overflow: visible; filter: drop-shadow(0 1px 2px #2d170980); transition: left .25s ease, top .25s ease, transform .2s ease; }
+@media (prefers-reduced-motion: reduce) { .assam, .assam-heading { transition: none; } }

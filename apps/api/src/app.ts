@@ -4,11 +4,14 @@ import { z } from 'zod';
 import { llmAgent, type Complete, type GameState } from '@marrakech/engine';
 import type { GameStore } from './store';
 import { rateLimit } from './rateLimit';
+import { onlineRoutes } from './online';
+import type { OnlineStore } from './onlineStore';
 
 export type AppDeps = {
   complete: Complete;
   store: GameStore;
   webOrigin?: string;
+  onlineStore?: OnlineStore;
 };
 
 // Validate the transport shape here; the shared engine remains the authority
@@ -37,11 +40,13 @@ const configSchema = z.object({
 const createGameSchema = z.object({ config: configSchema, state: gameStateSchema });
 const updateGameSchema = z.object({ state: gameStateSchema });
 
-export function createApp({ complete, store, webOrigin }: AppDeps) {
+export function createApp({ complete, store, webOrigin, onlineStore }: AppDeps) {
   const app = new Hono();
   const agent = llmAgent({ complete, name: 'llm' });
 
   app.use('/api/*', cors({ origin: webOrigin ?? 'http://localhost:5173' }));
+
+  app.route('/api/online', onlineRoutes(onlineStore));
 
   app.get('/api/health', (c) => c.json({ ok: true }));
 

@@ -2,7 +2,9 @@
 // matching the physical game (see assets/example-game-state.png).
 // Pieces are positioned in *fractions of the board image*, measured from the
 // printed grid, so everything scales responsively with the board.
+import { useEffect, useRef } from 'react';
 import type { Colour, Coord, GameState, Rug } from '@marrakech/engine';
+import { cornerAnimation } from './cornerAnimation';
 import boardImg from '../assets/board.webp';
 import assamImg from '../assets/assam.png';
 import rugCyan from '../assets/rug_cyan.png';
@@ -22,14 +24,14 @@ const pct = (n: number) => `${n * 100}%`;
 // A clickable/highlighted cell during the placement phase.
 export type Overlay = { coord: Coord; variant: 'anchor' | 'second' | 'selected'; onClick?: () => void };
 
-export function BoardView({ state, overlays = [] }: { state: GameState; overlays?: Overlay[] }) {
+export function BoardView({ state, overlays = [], walking = false }: { state: GameState; overlays?: Overlay[]; walking?: boolean }) {
   return (
     <div className="board-wrap" style={{ aspectRatio: String(BOARD_ASPECT) }}>
       <img className="board-img" src={boardImg} alt="Marrakech board" draggable={false} />
       {state.rugs.map((rug, i) => (
         <RugPiece key={i} rug={rug} z={i + 1} />
       ))}
-      <AssamPiece state={state} />
+      <AssamPiece state={state} walking={walking} />
       {overlays.map((o, i) => (
         <button
           key={i}
@@ -85,25 +87,75 @@ function RugPiece({ rug, z }: { rug: Rug; z: number }) {
   );
 }
 
-function AssamPiece({ state }: { state: GameState }) {
+function AssamPiece({ state, walking }: { state: GameState; walking: boolean }) {
   const { pos, facing } = state.assam;
   const cx = GEO.left + (pos.col + 0.5) * GEO.cell;
   const cy = GEO.top + (pos.row + 0.5) * GEO.cell;
   const sizeF = GEO.cell * 1.0;
+  const pieceRef = useRef<HTMLImageElement>(null);
+  const markerRef = useRef<SVGSVGElement>(null);
+  const previous = useRef(state.assam);
+  const { col, row } = pos;
+  useEffect(() => {
+    const from = previous.current;
+    const to = { pos: { col, row }, facing };
+    previous.current = to;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const route = walking ? cornerAnimation(from, to) : null;
+    const animations: Animation[] = [];
+    for (const [element, scale] of [[pieceRef.current, 1], [markerRef.current, 1.32]] as const) {
+      if (!element?.animate) continue;
+      if (route) {
+        animations.push(element.animate(route.map(frame => ({
+          left: pct(GEO.left + (frame.col + .5) * GEO.cell - GEO.cell * scale / 2),
+          top: pct(GEO.top + (frame.row + .5) * GEO.cell - GEO.cell * scale / 2),
+          transform: `rotate(${frame.rotation}deg)`,
+          offset: frame.offset,
+        })), { duration: 250, easing: 'linear' }));
+      } else if (from.facing !== facing) {
+        const start = FACING_ANGLE[from.facing];
+        const delta = ((FACING_ANGLE[facing] - start + 540) % 360) - 180;
+        animations.push(element.animate([
+          { transform: `rotate(${start}deg)` },
+          { transform: `rotate(${start + delta}deg)` },
+        ], { duration: 200, easing: 'ease' }));
+      }
+    }
+    return () => animations.forEach(animation => animation.cancel());
+  }, [col, row, facing, walking]);
   return (
-    <img
-      className="assam"
-      src={assamImg}
-      alt="Assam"
-      draggable={false}
-      style={{
-        left: pct(cx - sizeF / 2),
-        top: pct(cy - sizeF / 2),
-        width: pct(sizeF),
-        height: pct(sizeF),
-        transform: `rotate(${FACING_ANGLE[facing]}deg)`,
-        zIndex: 1000,
-      }}
-    />
+    <>
+      <img
+        className="assam"
+        ref={pieceRef}
+        src={assamImg}
+        alt="Assam"
+        draggable={false}
+        style={{
+          left: pct(cx - sizeF / 2),
+          top: pct(cy - sizeF / 2),
+          width: pct(sizeF),
+          height: pct(sizeF),
+          transform: `rotate(${FACING_ANGLE[facing]}deg)`,
+          zIndex: 1000,
+        }}
+      />
+      <svg
+        className="assam-heading"
+        ref={markerRef}
+        viewBox="0 0 100 100"
+        role="img"
+        aria-label={`Assam faces ${{ N: 'up', E: 'right', S: 'down', W: 'left' }[facing]}`}
+        style={{
+          left: pct(cx - sizeF * 0.66),
+          top: pct(cy - sizeF * 0.66),
+          width: pct(sizeF * 1.32),
+          height: pct(sizeF * 1.32),
+          transform: `rotate(${FACING_ANGLE[facing]}deg)`,
+        }}
+      >
+        <path d="M50 4 L61 22 L50 18 L39 22 Z" fill="#fff6d9" stroke="#653516" strokeWidth="3" strokeLinejoin="round" />
+      </svg>
+    </>
   );
 }

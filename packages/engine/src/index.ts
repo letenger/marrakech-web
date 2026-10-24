@@ -9,3 +9,5 @@ export * from './game/moves';
 export * from './game/ai/agent';
 export * from './game/ai/agents';
 export * from './game/ai/llm';
+export * from './online';
+export * from './game/transition';

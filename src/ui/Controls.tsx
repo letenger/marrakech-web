@@ -1,6 +1,14 @@
 // Turn controls. Which buttons are enabled depends on the current phase.
-import type { Colour, GameState } from '@marrakech/engine';
+import type { Colour, Facing, GameState } from '@marrakech/engine';
 import type { PlayerNames } from './players';
+import assamImg from '../assets/assam.png';
+
+const DIRECTIONS: { facing: Facing; label: string; arrow: string }[] = [
+  { facing: 'N', label: 'up', arrow: '↑' },
+  { facing: 'E', label: 'right', arrow: '→' },
+  { facing: 'S', label: 'down', arrow: '↓' },
+  { facing: 'W', label: 'left', arrow: '←' },
+];
 
 export type Controls = {
   state: GameState;
@@ -18,6 +26,8 @@ export type Controls = {
 export function Controls(p: Controls) {
   const { state, phase } = { state: p.state, phase: p.state.phase };
   const current = state.players[state.turnIndex];
+  const facingIndex = DIRECTIONS.findIndex(direction => direction.facing === state.assam.facing);
+  const facing = DIRECTIONS[facingIndex];
 
   return (
     <section className="controls">
@@ -32,16 +42,37 @@ export function Controls(p: Controls) {
       {!p.winner && (
         <>
           <div className="phase-steps">
-            <span className={phase === 'rotate' ? 'step on' : 'step'}>1 · Rotate</span>
+            <span className={phase === 'rotate' ? 'step on' : 'step'}>1 · Direction</span>
             <span className={phase === 'move' ? 'step on' : 'step'}>2 · Roll</span>
             <span className={phase === 'place' ? 'step on' : 'step'}>3 · Place</span>
           </div>
 
           {phase === 'rotate' && (
-            <div className="btn-row">
-              <button type="button" disabled={p.busy} onClick={() => p.onRotate(270)}>↺ Turn left</button>
-              <button type="button" disabled={p.busy} onClick={() => p.onRotate(0)}>↑ Keep straight</button>
-              <button type="button" disabled={p.busy} onClick={() => p.onRotate(90)}>↻ Turn right</button>
+            <div className="direction-picker">
+              <p className="direction-label" id="direction-help">Choose a board direction</p>
+              <div className="direction-pad" role="group" aria-label="Assam direction" aria-describedby="direction-help direction-rule">
+                {DIRECTIONS.map((direction, index) => {
+                  const rotation = ((index - facingIndex + 4) % 4) * 90;
+                  const backwards = rotation === 180;
+                  return <button
+                    key={direction.facing}
+                    type="button"
+                    className={`direction-button direction-${direction.facing}`}
+                    aria-label={`Face ${direction.label}`}
+                    title={backwards ? `Cannot face ${direction.label} — Assam cannot turn back` : `Face ${direction.label} on the board`}
+                    disabled={p.busy || backwards}
+                    onClick={() => { if (!backwards) p.onRotate(rotation as 0 | 90 | 270); }}
+                  ><span aria-hidden="true">{direction.arrow}</span></button>;
+                })}
+                <div className="direction-center" aria-hidden="true">
+                  <div className="direction-preview" style={{ transform: `rotate(${facingIndex * 90}deg)` }}>
+                    <img src={assamImg} alt="" draggable={false} />
+                    <span className="direction-preview-tip">▲</span>
+                  </div>
+                </div>
+              </div>
+              <p className="direction-facing">Facing <strong>{facing.arrow} {facing.label}</strong></p>
+              <p className="direction-rule" id="direction-rule">Arrows follow the board. Assam cannot turn back.</p>
             </div>
           )}
 

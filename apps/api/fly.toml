@@ -8,6 +8,16 @@ primary_region = 'syd'
 
 [build]
 
+[env]
+  PORT = '3000'
+  DB_PATH = '/data/marrakech.db'
+  ONLINE_DB_PATH = '/data/online.db'
+  WEB_ORIGIN = 'https://marrakech-web-api-xnnv.vercel.app'
+
+[[mounts]]
+  source = 'marrakech_data'
+  destination = '/data'
+
 [http_service]
   internal_port = 3000
   force_https = true

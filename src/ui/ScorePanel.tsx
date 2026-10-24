@@ -9,6 +9,10 @@ export function ScorePanel({ state, names }: { state: GameState; names: PlayerNa
   return (
     <aside className="score-panel">
       <h2>Players</h2>
+      <p className="score-legend">
+        <span><img className="coin" src={coinGold} alt="" /> Dirhams</span>
+        <span><span aria-hidden="true">🧶</span> Rugs</span>
+      </p>
       {state.players.map((p, i) => (
         <div
           key={p.colour}

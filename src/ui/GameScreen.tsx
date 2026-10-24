@@ -39,7 +39,7 @@ export function GameScreen({
         </button>
       </header>
       <main className="layout">
-        <BoardView state={flow.state} overlays={flow.overlays} />
+        <BoardView state={flow.state} overlays={flow.overlays} walking={flow.walking} />
         <div className="side">
           <Controls
             state={flow.state}

@@ -9,18 +9,19 @@ A full-stack TypeScript adaptation of Dominique Ehrhard's board game *Marrakech*
 ## Highlights
 
 - Complete two-to-four-player game flow: rotate, roll, move, settle rent, place rugs, score, and determine a winner.
+- Public online lobby with host-approved rooms for two to four people, shared gameplay, and reconnect support. See [multiplayer setup](docs/MULTIPLAYER.md); online hosting requires a persistent single-instance API.
 - Random, greedy, and depth-limited expectiminimax opponents that use the same legal-move API as human players.
 - Optional LLM opponent with constrained outputs, validation, retry, and deterministic fallback.
 - Shared `@marrakech/engine` package used by the browser, API, tests, and evaluation harness.
 - Typed Hono API with Zod validation, CORS controls, per-IP rate limiting, and SQLite persistence.
 - Save and resume in the browser, responsive layouts, keyboard-friendly dialogs, and reduced-motion support.
-- 4,023 automated tests across engine rules, fixtures, agents, UI interactions, persistence, and API routes.
+- Over 4,000 automated tests across engine rules, fixtures, agents, UI interactions, persistence, and API routes.
 
 ## Project timeline
 
 - **February 2025:** Started the project and built the core rules, playable React interface, scenes, animation, save and resume, and accessibility support.
 - **March 2026:** Added algorithmic and LLM opponents, the seeded evaluation harness, shared engine workspace, API, persistence, and model-provider adapters. This marked the end of the project’s active development period.
-- **October 2026:** Performed portfolio maintenance only: refreshed dependencies, verified the existing deployment, and streamlined the public documentation.
+- **October 2026:** Refreshed dependencies and portfolio documentation, then added public multiplayer rooms, board-relative direction controls, and printed corner-route animations.
 
 ## Architecture
 
@@ -95,20 +96,22 @@ docs/               technical notes for AI, testing, and data modelling
 
 ## Run locally
 
-Requirements: Node.js 20+ and npm.
+Requirements: Node.js 22.13+ and npm (the API uses built-in SQLite).
 
 ```bash
 npm install
 npm run dev
 ```
 
-For the API and LLM seat:
+For online multiplayer and the optional LLM seat:
 
 ```bash
 cp .env.example .env
 npm run dev:api       # http://localhost:8787
 npm run dev           # http://localhost:5173, in another terminal
 ```
+
+Human online games do not require a model API key. Open the web app in two separate browsers, choose **Play online**, and create/request entry to the same room. Configure `WEB_ORIGIN` and `VITE_API_URL` for deployment; see [online rooms and hosting](docs/MULTIPLAYER.md).
 
 Set `LLM_PROVIDER=anthropic` to use Anthropic. The default adapter supports OpenAI-compatible endpoints through `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`.
 

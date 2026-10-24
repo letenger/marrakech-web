@@ -27,5 +27,5 @@ COPY packages/engine ./packages/engine
 WORKDIR /app/apps/api
 
 # Fly sets PORT (fly.toml [env]); server.ts reads process.env.PORT (default 8787).
-EXPOSE 8787
+EXPOSE 3000
 CMD ["npm", "start"]

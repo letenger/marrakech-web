@@ -50,7 +50,7 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     switch (s.phase) {
       case 'move': return `${who} — roll the die.`;
       case 'place': return `${who} — place a rug next to Assam.`;
-      default: return `${who} to move — rotate Assam (or keep straight).`;
+      default: return `${who} to move — choose a direction on the board.`;
     }
   }
 
@@ -264,6 +264,7 @@ export function useTurnFlow(config: GameConfig, resumeState?: GameState) {
     message: ui.message,
     winner: ui.winner,
     busy,
+    walking,
     isAITurn,
     gameOver,
     overlays,
