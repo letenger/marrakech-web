@@ -27,7 +27,7 @@ export class OnlineError extends Error {
 
 export async function onlineRequest<T>(path: string, token?: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(new Error('The server took too long. Please try again.')), 10_000);
+  const timeout = setTimeout(() => controller.abort(new Error('The server took too long. Please try again.')), path === 'session' || path === 'snapshot' ? 90_000 : 10_000);
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
   if (signal?.aborted) controller.abort();
@@ -58,7 +58,7 @@ export async function readEvents(token: string, signal: AbortSignal, onData: (da
   const abort = () => controller.abort();
   signal.addEventListener('abort', abort, { once: true });
   if (signal.aborted) controller.abort();
-  let watchdog = setTimeout(() => controller.abort(), 10_000);
+  let watchdog = setTimeout(() => controller.abort(), 90_000);
   function resetWatchdog() {
     clearTimeout(watchdog);
     // Heartbeats arrive every 15 seconds. Detect half-open connections too.

@@ -31,6 +31,7 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
   const [connected, setConnected] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [waking, setWaking] = useState(false);
   const [motion, setMotion] = useState<Motion | null>(null);
   const [pendingRents, setPendingRents] = useState<PendingRent[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -79,6 +80,11 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
   }
 
   useEffect(() => () => clearTimeout(motionTimer.current), []);
+  useEffect(() => {
+    if (connected || (!session && !busy)) return;
+    const timer = setTimeout(() => setWaking(true), 5_000);
+    return () => { clearTimeout(timer); setWaking(false); };
+  }, [connected, session, busy]);
 
   const finishDice = useCallback(() => {
     if (!motion) return;
@@ -183,6 +189,7 @@ export default function OnlineScreen({ onBack }: { onBack: () => void }) {
       <button type="button" className="menu-btn" aria-label="Menu" onClick={() => setMenuOpen(true)}>❖</button>
     </header>
     {session && <p className="online-connection" role="status">{inMatch && <><span className="online-room-name">{room.name}</span><span> · {room.code} · </span></>}<span>{session.name} · {connected ? 'Connected' : 'Connecting…'}{!connected && ' — waiting to reconnect'}</span></p>}
+    {waking && <p className="online-notice" role="status">The lobby is waking up. This can take about a minute.</p>}
     {error && <p className="online-error" role="alert">{error}</p>}
     {notice && <p className="online-notice" role="status">{notice}</p>}
     {!session ? <section className="online-card online-entry"><h2>Join the public lobby</h2><p>Choose a name other players will see. No account needed.</p>

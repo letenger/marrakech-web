@@ -1,0 +1,18 @@
+# Connect this repository to Render; add Neon pooled DATABASE_URL as a secret.
+services:
+  - type: web
+    name: marrakech-api
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --workspace @marrakech/api --include-workspace-root=false
+    startCommand: npm start --workspace @marrakech/api
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: WEB_ORIGIN
+        value: https://marrakech-web-api-xnnv.vercel.app
+      - key: DATABASE_URL
+        sync: false

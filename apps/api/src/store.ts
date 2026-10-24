@@ -11,9 +11,9 @@ export type SavedGame = {
 };
 
 export interface GameStore {
-  create(config: GameConfig, state: GameState): SavedGame;
-  update(id: string, state: GameState): SavedGame | null;
-  get(id: string): SavedGame | null;
+  create(config: GameConfig, state: GameState): SavedGame | Promise<SavedGame>;
+  update(id: string, state: GameState): SavedGame | null | Promise<SavedGame | null>;
+  get(id: string): SavedGame | null | Promise<SavedGame | null>;
 }
 
 export class SqliteStore implements GameStore {

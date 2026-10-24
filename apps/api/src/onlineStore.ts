@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 export interface OnlineStore {
   load(): string | null;
   save(value: string): void;
+  flush?(): Promise<void>;
 }
 export class MemoryOnlineStore implements OnlineStore {
   private value: string | null = null;

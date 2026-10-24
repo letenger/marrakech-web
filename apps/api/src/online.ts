@@ -205,6 +205,7 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
     data.guests.push(guest);
     observed.add(guest.id);
     save();
+    await store.flush?.();
     return c.json({
       token,
       guestId: guest.id,
@@ -223,7 +224,12 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
     await next();
   });
   const getGuest = (c: Context<OnlineEnv>) => c.get('guest');
-  app.get('/snapshot', c => { reconcileAi(); return c.json(snapshot(getGuest(c))); });
+  app.get('/snapshot', async c => {
+    reconcileAi();
+    const result = snapshot(getGuest(c));
+    await store.flush?.();
+    return c.json(result);
+  });
   app.get('/events', c => {
     const guest = getGuest(c);
     if ((connections.get(guest.id) ?? 0) >= 3)
@@ -245,10 +251,9 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
           observed.add(guest.id);
           clean();
           dirty = false;
-          await stream.writeSSE({
-            event: 'snapshot',
-            data: JSON.stringify(snapshot(guest))
-          });
+          const result = snapshot(guest);
+          await store.flush?.();
+          await stream.writeSSE({ event: 'snapshot', data: JSON.stringify(result) });
           if (dirty || stream.aborted)
             continue;
           await new Promise<void>(resolve => {
@@ -277,14 +282,16 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
     if (!parsed.success)
       return c.json({ error: 'Invalid command.' }, 400);
     const cmd = parsed.data as OnlineCommand;
-    if (guest.receipts.includes(cmd.id))
-      return c.json(snapshot(guest));
+    if (guest.receipts.includes(cmd.id)) {
+      const result = snapshot(guest);
+      await store.flush?.();
+      return c.json(result);
+    }
     const backup = JSON.stringify(data);
     try {
       execute(guest, cmd);
       guest.receipts.push(cmd.id);
       broadcast();
-      return c.json(snapshot(guest));
     }
     catch (error) {
       const previous = JSON.parse(backup) as Data;
@@ -296,6 +303,9 @@ export function onlineRoutes(store: OnlineStore = new MemoryOnlineStore(), rng =
       data.rooms = previous.rooms;
       return c.json({ error: error instanceof Error ? error.message : 'Action failed.' }, 409);
     }
+    const result = snapshot(guest);
+    await store.flush?.();
+    return c.json(result);
   });
 
   // Bots act only on the server. Each version gets at most one delayed job.

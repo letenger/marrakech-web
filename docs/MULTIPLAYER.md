@@ -49,11 +49,11 @@ Commands cover create, request, cancelRequest, accept, decline, remove, addAi, s
 
 Run **one API process on one machine**. The room registry, presence, and command sequencing are coordinated in process; multiple instances require shared coordination before scaling.
 
-`ONLINE_DB_PATH` defaults to `marrakech-online.db`. Its SQLite row atomically stores the current online registry, accepted command IDs, room snapshots, and revision. The first implementation favors a simple recoverable store over multi-instance scalability; snapshot serialization and registry scans are suitable for a small lobby, not high-volume public traffic.
+`ONLINE_DB_PATH` defaults to `marrakech-online.db` for local development. When `DATABASE_URL` is set (such as a pooled Neon PostgreSQL connection string on Render), both saved games and the online room registry persist to PostgreSQL instead of local SQLite. `PostgresOnlineStore` increments a generation counter on startup so a newly deployed instance fences out its predecessor during rolling deploys, and flushes pending snapshot writes on `SIGTERM` before shutdown.
 
-The supplied Fly configuration sets port 3000 and stores both databases under `/data`, mounted from a volume named `marrakech_data`. **Provision that volume in the app's region before a new deployment.** The production app uses a 1 GB volume in Sydney. Keep the machine count at one and account for long-lived SSE connections when configuring auto-stop and idle behavior.
+The supplied `render.yaml` Blueprint deploys `@marrakech/api` as a single Node web service on Render and requires `DATABASE_URL` to be configured as a secret environment variable. Keep the instance count at one and account for free-tier spin-down delays (the browser client waits up to 90 seconds and displays a wake-up notice while the lobby starts).
 
-Set `WEB_ORIGIN` to the actual HTTPS web origin, and build the frontend with the HTTPS API address in `VITE_API_URL`. Verify that the hosting proxy does not buffer SSE, that requests can reconnect, and that SQLite data survives a machine restart. Back up the volume before changing deployments.
+Set `WEB_ORIGIN` to the actual HTTPS web origin, and build the frontend with the HTTPS API address in `VITE_API_URL`. Verify that the hosting proxy does not buffer SSE, that requests can reconnect, and that PostgreSQL data survives a service restart.
 
 The frontend is deployed by the GitHub integration to Vercel. Set `VITE_API_URL` for the Production environment before pushing a release to `main`.
 

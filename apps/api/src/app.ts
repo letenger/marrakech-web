@@ -48,7 +48,11 @@ export function createApp({ complete, store, webOrigin, onlineStore }: AppDeps) 
 
   app.route('/api/online', onlineRoutes(onlineStore));
 
-  app.get('/api/health', (c) => c.json({ ok: true }));
+  app.get('/api/health', async (c) => {
+    try { await onlineStore?.flush?.(); }
+    catch { return c.json({ ok: false }, 503); }
+    return c.json({ ok: true });
+  });
 
   const aiLimiter = rateLimit({ windowMs: 60_000, max: 30 });
 
@@ -74,12 +78,12 @@ export function createApp({ complete, store, webOrigin, onlineStore }: AppDeps) 
   app.post('/api/games', async (c) => {
     const parsed = createGameSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: 'invalid body', details: parsed.error.issues }, 400);
-    const saved = store.create(parsed.data.config, parsed.data.state as unknown as GameState);
+    const saved = await store.create(parsed.data.config, parsed.data.state as unknown as GameState);
     return c.json({ id: saved.id }, 201);
   });
 
-  app.get('/api/games/:id', (c) => {
-    const saved = store.get(c.req.param('id'));
+  app.get('/api/games/:id', async (c) => {
+    const saved = await store.get(c.req.param('id'));
     if (!saved) return c.json({ error: 'not found' }, 404);
     return c.json(saved);
   });
@@ -87,7 +91,7 @@ export function createApp({ complete, store, webOrigin, onlineStore }: AppDeps) 
   app.put('/api/games/:id', async (c) => {
     const parsed = updateGameSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: 'invalid body', details: parsed.error.issues }, 400);
-    const saved = store.update(c.req.param('id'), parsed.data.state as unknown as GameState);
+    const saved = await store.update(c.req.param('id'), parsed.data.state as unknown as GameState);
     if (!saved) return c.json({ error: 'not found' }, 404);
     return c.json(saved);
   });
