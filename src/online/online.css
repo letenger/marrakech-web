@@ -131,7 +131,7 @@
   .online-match .score-legend { font-size: .6rem; gap: 4px 8px; }
   .online-match .score-legend > span { gap: 2px; }
   .online-match .score-legend .coin { width: 12px; height: 12px; }
-  .online-match .player-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 5px 2px; }
+  .online-match .player-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 5px 2px; }
   .online-match .swatch { position: absolute; top: 6px; left: 2px; width: 10px; height: 10px; }
   .online-match .player-name { grid-column: 1 / -1; padding-left: 14px; font-size: .72rem; }
   .online-match .stat { font-size: .62rem; gap: 1px; }
